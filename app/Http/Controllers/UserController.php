@@ -25,7 +25,8 @@ class UserController extends Controller
 
             $pagination = $this::applyPagination($request);
 
-            $users = User::orderBy($pagination['sort_by'], $pagination['sort_order'])
+            $users = User::with(['loyaltyPoints', 'achievements', 'badges'])
+                ->orderBy($pagination['sort_by'], $pagination['sort_order'])
                 ->paginate($pagination['per_page']);
 
             return $this->successCollection(
@@ -71,7 +72,7 @@ class UserController extends Controller
         try {
             $this->authorize('view', Auth::user());
 
-            $user = User::find($id);
+            $user = User::with(['loyaltyPoints', 'achievements', 'badges'])->find($id);
 
             if (! $user) {
                 return $this->notFoundError('User', $id);

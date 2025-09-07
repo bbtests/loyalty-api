@@ -18,6 +18,11 @@ class DatabaseSeeder extends Seeder
             RolePermissionSeeder::class,
             SuperAdminSeeder::class,
             UserSeeder::class,
+            BadgeSeeder::class,
+            AchievementSeeder::class,
+            LoyaltyPointSeeder::class,
+            UserAchievementSeeder::class,
+            UserBadgeSeeder::class,
         ]);
     }
 }
