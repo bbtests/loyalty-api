@@ -1,0 +1,19 @@
+includes:
+    - vendor/phpstan/phpstan/conf/bleedingEdge.neon
+
+parameters:
+    level: 6
+    paths:
+        - app
+        - database
+        - routes
+        - tests
+
+    excludePaths:
+        - vendor
+
+    inferPrivatePropertyTypeFromConstructor: true
+
+    # Laravel-specific helpers (optional)
+    bootstrapFiles:
+        - bootstrap/app.php

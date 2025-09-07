@@ -1,0 +1,84 @@
+name: Generate API Documentation
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  docs:
+    name: Generate Documentation
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: "8.2"
+          extensions: mbstring, dom, fileinfo, mysql, sqlite, redis, bcmath, gd, zip, curl, xml, intl, json, pdo_sqlite
+          tools: composer:v2
+
+      - name: Install dependencies
+        run: composer install --prefer-dist --no-progress --no-suggest --no-interaction
+
+      - name: Copy environment file
+        run: |
+          cp .env.example .env
+          php artisan key:generate
+
+      - name: Add Test environment configuration
+        run: |
+          echo "DB_CONNECTION=sqlite" >> .env
+          echo "DB_DATABASE=database/database.sqlite" >> .env
+          echo "CACHE_STORE=array" >> .env
+          echo "QUEUE_CONNECTION=sync" >> .env
+          echo "SESSION_DRIVER=array" >> .env
+          echo "MAIL_MAILER=array" >> .env
+          echo "TELESCOPE_ENABLED=false" >> .env
+          echo "PULSE_ENABLED=false" >> .env
+
+      - name: Create SQLite database
+        run: touch database/database.sqlite
+
+      - name: Run database migrations
+        run: php artisan migrate --force
+
+      - name: Check Scribe configuration
+        run: |
+          echo "Checking Scribe configuration..."
+          php artisan scribe:check || echo "Scribe check failed, but continuing..."
+
+      - name: Generate API documentation
+        run: |
+          echo "Attempting to generate API documentation..."
+          if composer docs; then
+            echo "✅ Documentation generated successfully"
+          else
+            echo "❌ Documentation generation failed"
+            echo "This might be due to missing routes or configuration issues"
+            echo "Check the Scribe configuration and ensure API routes are properly documented"
+            exit 1
+          fi
+
+      - name: Upload documentation
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: api-docs
+          path: docs/
+          retention-days: 30
+
+      - name: Comment on PR (if applicable)
+        if: failure() && github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: '❌ API documentation generation failed. Please check the Scribe configuration and ensure all API routes are properly documented.'
+            })

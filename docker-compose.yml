@@ -1,63 +1,133 @@
+x-logging: &default-logging
+    driver: "json-file"
+    options:
+        max-size: "10m"
+        max-file: "3"
+
 services:
+    client:
+        build:
+            context: ../client
+            dockerfile: Dockerfile
+        ports:
+            - "${CLIENT_PORT:-3000}:3000"
+        logging: *default-logging
+        volumes:
+            - "../client:/app"
+            - ../client/startup.sh:/usr/local/bin/startup.sh:ro
+            - "/app/node_modules"
+        profiles: ["client", "default"]
+        networks:
+            - sail
     laravel.test:
         build:
-            context: './vendor/laravel/sail/runtimes/8.4'
+            context: "./vendor/laravel/sail/runtimes/8.4"
             dockerfile: Dockerfile
             args:
-                WWWGROUP: '${WWWGROUP}'
-        image: 'sail-8.4/app'
+                WWWGROUP: "${WWWGROUP}"
+        image: "sail-8.4/app"
         extra_hosts:
-            - 'host.docker.internal:host-gateway'
+            - "host.docker.internal:host-gateway"
         ports:
-            - '${APP_PORT:-80}:80'
-            - '${VITE_PORT:-5173}:${VITE_PORT:-5173}'
+            - "${APP_PORT:-80}:80"
+            - "${VITE_PORT:-5173}:${VITE_PORT:-5173}"
         environment:
-            WWWUSER: '${WWWUSER}'
+            WWWUSER: "${WWWUSER}"
             LARAVEL_SAIL: 1
-            XDEBUG_MODE: '${SAIL_XDEBUG_MODE:-off}'
-            XDEBUG_CONFIG: '${SAIL_XDEBUG_CONFIG:-client_host=host.docker.internal}'
-            IGNITION_LOCAL_SITES_PATH: '${PWD}'
+            XDEBUG_MODE: "${SAIL_XDEBUG_MODE:-off}"
+            XDEBUG_CONFIG: "${SAIL_XDEBUG_CONFIG:-client_host=host.docker.internal}"
+            IGNITION_LOCAL_SITES_PATH: "${PWD}"
         volumes:
-            - '.:/var/www/html'
+            - ".:/var/www/html"
+            - ./startup.sh:/usr/local/bin/startup.sh:ro
+        entrypoint: ["/var/www/html/startup.sh"]
+        logging: *default-logging
+        profiles: ["api", "default"]
         networks:
             - sail
         depends_on:
-            - mysql
+            - postgres
             - redis
             - meilisearch
             - mailpit
             - selenium
-    mysql:
-        image: 'mysql/mysql-server:8.0'
-        ports:
-            - '${FORWARD_DB_PORT:-3306}:3306'
+    horizon:
+        image: "sail-8.4/app"
+        restart: unless-stopped
+        depends_on:
+            - postgres
+            - redis
         environment:
-            MYSQL_ROOT_PASSWORD: '${DB_PASSWORD}'
-            MYSQL_ROOT_HOST: '%'
-            MYSQL_DATABASE: '${DB_DATABASE}'
-            MYSQL_USER: '${DB_USERNAME}'
-            MYSQL_PASSWORD: '${DB_PASSWORD}'
-            MYSQL_ALLOW_EMPTY_PASSWORD: 1
-            MYSQL_EXTRA_OPTIONS: '${MYSQL_EXTRA_OPTIONS}'
+            WWWUSER: "${WWWUSER}"
+            LARAVEL_SAIL: 1
         volumes:
-            - 'sail-mysql:/var/lib/mysql'
-            - './vendor/laravel/sail/database/mysql/create-testing-database.sh:/docker-entrypoint-initdb.d/10-create-testing-database.sh'
+            - ".:/var/www/html"
+        entrypoint: ["php", "artisan", "horizon"]
+        logging: *default-logging
+        profiles: ["api", "default"]
+        mem_limit: 512m
+        mem_reservation: 256m
+        networks:
+            - sail
+    scheduler:
+        image: "sail-8.4/app"
+        restart: unless-stopped
+        depends_on:
+            - postgres
+            - redis
+        environment:
+            WWWUSER: "${WWWUSER}"
+            LARAVEL_SAIL: 1
+        volumes:
+            - ".:/var/www/html"
+        entrypoint: ["php", "artisan", "schedule:work"]
+        logging: *default-logging
+        profiles: ["api", "default"]
+        mem_limit: 512m
+        mem_reservation: 256m
+        networks:
+            - sail
+    postgres:
+        image: postgres
+        environment:
+            POSTGRES_DB: ${DB_DATABASE}
+            POSTGRES_USER: ${DB_USERNAME}
+            POSTGRES_PASSWORD: ${DB_PASSWORD}
+        ports:
+            - "${DB_PORT:-5432}:5432"
+        volumes:
+            - sail-postgres:/var/lib/postgresql/data
+        logging: *default-logging
+        profiles: ["api", "default"]
         networks:
             - sail
         healthcheck:
             test:
-                - CMD
-                - mysqladmin
-                - ping
-                - '-p${DB_PASSWORD}'
-            retries: 3
+                ["CMD-SHELL", "pg_isready -U ${DB_USERNAME} -d ${DB_DATABASE}"]
+            interval: 10s
             timeout: 5s
-    redis:
-        image: 'redis:alpine'
+            retries: 5
+    pgadmin:
+        image: dpage/pgadmin4
+        container_name: pgadmin
+        environment:
+            PGADMIN_DEFAULT_EMAIL: ${PGADMIN_DEFAULT_EMAIL:-hello@example.com}
+            PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_DEFAULT_PASSWORD:-secret}
         ports:
-            - '${FORWARD_REDIS_PORT:-6379}:6379'
+            - "${FORWARD_PGADMIN_PORT:-8080}:80"
         volumes:
-            - 'sail-redis:/data'
+            - "sail-pgadmin:/var/lib/pgadmin"
+        logging: *default-logging
+        profiles: ["api", "default"]
+        networks:
+            - sail
+    redis:
+        image: "redis:alpine"
+        ports:
+            - "${FORWARD_REDIS_PORT:-6379}:6379"
+        volumes:
+            - "sail-redis:/data"
+        profiles: ["api", "default"]
         networks:
             - sail
         healthcheck:
@@ -68,44 +138,49 @@ services:
             retries: 3
             timeout: 5s
     meilisearch:
-        image: 'getmeili/meilisearch:latest'
+        image: "getmeili/meilisearch:latest"
         ports:
-            - '${FORWARD_MEILISEARCH_PORT:-7700}:7700'
+            - "${FORWARD_MEILISEARCH_PORT:-7700}:7700"
         environment:
-            MEILI_NO_ANALYTICS: '${MEILISEARCH_NO_ANALYTICS:-false}'
+            MEILI_NO_ANALYTICS: "${MEILISEARCH_NO_ANALYTICS:-false}"
         volumes:
-            - 'sail-meilisearch:/meili_data'
+            - "sail-meilisearch:/meili_data"
+        profiles: ["api", "default"]
         networks:
             - sail
         healthcheck:
             test:
                 - CMD
                 - wget
-                - '--no-verbose'
-                - '--spider'
-                - 'http://127.0.0.1:7700/health'
+                - "--no-verbose"
+                - "--spider"
+                - "http://127.0.0.1:7700/health"
             retries: 3
             timeout: 5s
     mailpit:
-        image: 'axllent/mailpit:latest'
+        image: "axllent/mailpit:latest"
         ports:
-            - '${FORWARD_MAILPIT_PORT:-1025}:1025'
-            - '${FORWARD_MAILPIT_DASHBOARD_PORT:-8025}:8025'
+            - "${FORWARD_MAILPIT_PORT:-1025}:1025"
+            - "${FORWARD_MAILPIT_DASHBOARD_PORT:-8025}:8025"
+        profiles: ["api", "default"]
         networks:
             - sail
     selenium:
         image: selenium/standalone-chromium
         extra_hosts:
-            - 'host.docker.internal:host-gateway'
+            - "host.docker.internal:host-gateway"
         volumes:
-            - '/dev/shm:/dev/shm'
+            - "/dev/shm:/dev/shm"
+        profiles: ["api", "default"]
         networks:
             - sail
 networks:
     sail:
         driver: bridge
 volumes:
-    sail-mysql:
+    sail-postgres:
+        driver: local
+    sail-pgadmin:
         driver: local
     sail-redis:
         driver: local
