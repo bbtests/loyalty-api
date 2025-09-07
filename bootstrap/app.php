@@ -1,5 +1,9 @@
 <?php
 
+use App\Services\AchievementService;
+use App\Services\BadgeService;
+use App\Services\LoyaltyService;
+use App\Services\PaymentService;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
@@ -19,6 +23,12 @@ return Application::configure(basePath: dirname(__DIR__))
             'role_or_permission' => \Spatie\Permission\Middleware\RoleOrPermissionMiddleware::class,
         ]);
     })
+    ->withBindings([
+        LoyaltyService::class,
+        AchievementService::class,
+        BadgeService::class,
+        PaymentService::class,
+    ])
     ->withExceptions(function (Exceptions $exceptions): void {
         //
     })->create();
