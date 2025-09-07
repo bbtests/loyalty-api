@@ -49,4 +49,12 @@ class User extends Authenticatable
             'password' => 'hashed',
         ];
     }
+    /**
+     * @return \Illuminate\Database\Eloquent\Relations\BelongsTo<\Spatie\Permission\Models\Role, $this>
+     */
+    public function role(): BelongsTo
+    {
+        return $this->belongsTo(\Spatie\Permission\Models\Role::class);
+    }
+
 }
