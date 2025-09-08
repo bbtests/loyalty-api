@@ -1,61 +1,374 @@
-<p align="center"><a href="https://laravel.com" target="_blank"><img src="https://raw.githubusercontent.com/laravel/art/master/logo-lockup/5%20SVG/2%20CMYK/1%20Full%20Color/laravel-logolockup-cmyk-red.svg" width="400" alt="Laravel Logo"></a></p>
+# Bumpa Loyalty Program API
 
-<p align="center">
-<a href="https://github.com/laravel/framework/actions"><img src="https://github.com/laravel/framework/workflows/tests/badge.svg" alt="Build Status"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/dt/laravel/framework" alt="Total Downloads"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/v/laravel/framework" alt="Latest Stable Version"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/l/laravel/framework" alt="License"></a>
-</p>
+A comprehensive Laravel-based API for managing a loyalty program system with achievements, badges, transactions, and cashback payments.
 
-## About Laravel
+## 🏗️ Architecture Overview
 
-Laravel is a web application framework with expressive, elegant syntax. We believe development must be an enjoyable and creative experience to be truly fulfilling. Laravel takes the pain out of development by easing common tasks used in many web projects, such as:
+This API provides a complete backend solution for a loyalty program featuring:
 
-- [Simple, fast routing engine](https://laravel.com/docs/routing).
-- [Powerful dependency injection container](https://laravel.com/docs/container).
-- Multiple back-ends for [session](https://laravel.com/docs/session) and [cache](https://laravel.com/docs/cache) storage.
-- Expressive, intuitive [database ORM](https://laravel.com/docs/eloquent).
-- Database agnostic [schema migrations](https://laravel.com/docs/migrations).
-- [Robust background job processing](https://laravel.com/docs/queues).
-- [Real-time event broadcasting](https://laravel.com/docs/broadcasting).
+- **User Management**: User registration, authentication, and role-based access control
+- **Loyalty Points**: Earn, redeem, and track loyalty points
+- **Achievements**: Unlockable achievements with progress tracking
+- **Badges**: Tiered badge system with requirements
+- **Transactions**: Purchase tracking and processing
+- **Cashback Payments**: Automated cashback processing
+- **Admin Dashboard**: Comprehensive admin interface for program management
 
-Laravel is accessible, powerful, and provides tools required for large, robust applications.
+## 🚀 Quick Start
 
-## Learning Laravel
+### Prerequisites
 
-Laravel has the most extensive and thorough [documentation](https://laravel.com/docs) and video tutorial library of all modern web application frameworks, making it a breeze to get started with the framework.
+- Docker and Docker Compose
+- PHP 8.4+ (if running locally)
+- Composer (if running locally)
+- PostgreSQL (if running locally)
 
-You may also try the [Laravel Bootcamp](https://bootcamp.laravel.com), where you will be guided through building a modern Laravel application from scratch.
+### Environment Setup
 
-If you don't feel like reading, [Laracasts](https://laracasts.com) can help. Laracasts contains thousands of video tutorials on a range of topics including Laravel, modern PHP, unit testing, and JavaScript. Boost your skills by digging into our comprehensive video library.
+1. **Copy the environment file:**
+   ```bash
+   cp .env.example .env
+   ```
 
-## Laravel Sponsors
+2. **Configure your environment variables:**
+   ```bash
+   # Database Configuration
+   DB_CONNECTION=pgsql
+   DB_HOST=postgres
+   DB_PORT=5432
+   DB_DATABASE=bumpa_loyalty
+   DB_USERNAME=bumpa_user
+   DB_PASSWORD=your_secure_password
 
-We would like to extend our thanks to the following sponsors for funding Laravel development. If you are interested in becoming a sponsor, please visit the [Laravel Partners program](https://partners.laravel.com).
+   # Application Configuration
+   APP_NAME="Bumpa Loyalty API"
+   APP_ENV=local
+   APP_KEY=base64:your_app_key_here
+   APP_DEBUG=true
+   APP_URL=http://laravel.test
 
-### Premium Partners
+   # API Configuration
+   API_KEY=your_api_key_here
+   ```
 
-- **[Vehikl](https://vehikl.com)**
-- **[Tighten Co.](https://tighten.co)**
-- **[Kirschbaum Development Group](https://kirschbaumdevelopment.com)**
-- **[64 Robots](https://64robots.com)**
-- **[Curotec](https://www.curotec.com/services/technologies/laravel)**
-- **[DevSquad](https://devsquad.com/hire-laravel-developers)**
-- **[Redberry](https://redberry.international/laravel-development)**
-- **[Active Logic](https://activelogic.com)**
+## 🐳 Docker Setup
 
-## Contributing
+### Option 1: Run API Only
 
-Thank you for considering contributing to the Laravel framework! The contribution guide can be found in the [Laravel documentation](https://laravel.com/docs/contributions).
+The API can be started independently using Docker Compose:
 
-## Code of Conduct
+```bash
+# Start the API with all dependencies
+docker compose --profile api up -d
 
-In order to ensure that the Laravel community is welcoming to all, please review and abide by the [Code of Conduct](https://laravel.com/docs/contributions#code-of-conduct).
+# This will start:
+# - Laravel API (laravel.test:80)
+# - PostgreSQL database
+# - Redis cache
+# - Horizon queue worker
+# - Scheduler
+# - PgAdmin (optional)
+# - Meilisearch (optional)
+# - Mailpit (optional)
+```
 
-## Security Vulnerabilities
+### Option 2: Run API + Client Together
 
-If you discover a security vulnerability within Laravel, please send an e-mail to Taylor Otwell via [taylor@laravel.com](mailto:taylor@laravel.com). All security vulnerabilities will be promptly addressed.
+From the root directory, start both services:
 
-## License
+```bash
+# Start both API and Client
+docker compose --profile default up -d
+```
 
-The Laravel framework is open-sourced software licensed under the [MIT license](https://opensource.org/licenses/MIT).
+### Option 3: Run Everything (Full Stack)
+
+```bash
+# Start all services including development tools
+docker compose up -d
+```
+
+## 🔧 Local Development Setup
+
+If you prefer to run the API locally without Docker:
+
+### 1. Install Dependencies
+
+```bash
+composer install
+```
+
+### 2. Database Setup
+
+```bash
+# Create database
+createdb bumpa_loyalty
+
+# Run migrations
+php artisan migrate
+
+# Seed the database
+php artisan db:seed
+```
+
+### 3. Start Development Server
+
+```bash
+# Start Laravel development server
+php artisan serve
+
+# Start Horizon (for queue processing)
+php artisan horizon
+
+# Start scheduler (in another terminal)
+php artisan schedule:work
+```
+
+## 📊 Database Seeding
+
+The API comes with comprehensive seeders that create realistic test data:
+
+```bash
+# Run all seeders
+php artisan db:seed
+
+# Run specific seeders
+php artisan db:seed --class=UserSeeder
+php artisan db:seed --class=AchievementSeeder
+php artisan db:seed --class=BadgeSeeder
+php artisan db:seed --class=LoyaltyPointSeeder
+php artisan db:seed --class=UserAchievementSeeder
+php artisan db:seed --class=UserBadgeSeeder
+```
+
+### Seeded Data Includes:
+
+- **Users**: 15+ users with various roles and profiles
+- **Achievements**: 5+ unlockable achievements
+- **Badges**: 4+ tiered badges (Bronze, Silver, Gold, Platinum)
+- **Loyalty Points**: Realistic point distributions
+- **User Achievements**: Random achievement assignments
+- **User Badges**: Badge assignments based on point thresholds
+
+## 🔐 Authentication
+
+The API uses Laravel Sanctum for authentication:
+
+### Default Admin User
+- **Email**: `superadmin@example.com`
+- **Password**: `password`
+- **Role**: Super Admin
+
+### API Authentication
+
+```bash
+# Login to get access token
+curl -X POST "http://laravel.test/api/v1/auth/login" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "email": "superadmin@example.com",
+    "password": "password"
+  }'
+
+# Use token in subsequent requests
+curl -X GET "http://laravel.test/api/v1/users" \
+  -H "Authorization: Bearer YOUR_TOKEN_HERE"
+```
+
+## 📡 API Endpoints
+
+### Authentication
+- `POST /api/v1/auth/login` - User login
+- `POST /api/v1/auth/logout` - User logout
+- `GET /api/v1/auth/me` - Get current user
+
+### Users
+- `GET /api/v1/users` - List users (paginated)
+- `GET /api/v1/users/{id}` - Get user details
+- `POST /api/v1/users` - Create user
+- `PUT /api/v1/users/{id}` - Update user
+- `DELETE /api/v1/users/{id}` - Delete user
+
+### Achievements
+- `GET /api/v1/achievements` - List achievements
+- `GET /api/v1/achievements/{id}` - Get achievement
+- `POST /api/v1/achievements` - Create achievement
+- `PUT /api/v1/achievements/{id}` - Update achievement
+- `DELETE /api/v1/achievements/{id}` - Delete achievement
+
+### Badges
+- `GET /api/v1/badges` - List badges
+- `GET /api/v1/badges/{id}` - Get badge
+- `POST /api/v1/badges` - Create badge
+- `PUT /api/v1/badges/{id}` - Update badge
+- `DELETE /api/v1/badges/{id}` - Delete badge
+
+### Loyalty Points
+- `GET /api/v1/loyalty-points` - List loyalty points
+- `GET /api/v1/loyalty-points/{id}` - Get loyalty points
+- `POST /api/v1/loyalty-points` - Create loyalty points
+- `PUT /api/v1/loyalty-points/{id}` - Update loyalty points
+- `DELETE /api/v1/loyalty-points/{id}` - Delete loyalty points
+
+### Transactions
+- `GET /api/v1/transactions` - List transactions
+- `GET /api/v1/transactions/{id}` - Get transaction
+- `POST /api/v1/transactions` - Create transaction
+- `PUT /api/v1/transactions/{id}` - Update transaction
+- `DELETE /api/v1/transactions/{id}` - Delete transaction
+
+### Cashback Payments
+- `GET /api/v1/cashback-payments` - List cashback payments
+- `GET /api/v1/cashback-payments/{id}` - Get cashback payment
+- `POST /api/v1/cashback-payments` - Create cashback payment
+- `PUT /api/v1/cashback-payments/{id}` - Update cashback payment
+- `DELETE /api/v1/cashback-payments/{id}` - Delete cashback payment
+
+## 🔄 Queue Processing
+
+The API uses Laravel Horizon for queue management:
+
+```bash
+# Start Horizon (if running locally)
+php artisan horizon
+
+# Monitor queues
+php artisan horizon:status
+```
+
+## 🧪 Testing
+
+```bash
+# Run all tests
+php artisan test
+
+# Run specific test suite
+php artisan test --testsuite=Feature
+php artisan test --testsuite=Unit
+
+# Generate coverage report
+php artisan test --coverage
+```
+
+## 📈 Monitoring & Debugging
+
+### Laravel Telescope
+Access the Telescope dashboard at `http://laravel.test/telescope` for:
+- Request/Response monitoring
+- Database query analysis
+- Job queue monitoring
+- Exception tracking
+
+### Laravel Horizon Dashboard
+Access the Horizon dashboard at `http://laravel.test/horizon` for:
+- Queue monitoring
+- Job statistics
+- Failed job management
+- Queue configuration
+
+## 🛠️ Development Tools
+
+### Code Quality
+```bash
+# Run PHPStan for static analysis
+./vendor/bin/phpstan analyse
+
+# Run Laravel Pint for code formatting
+./vendor/bin/pint
+```
+
+### Database Management
+```bash
+# Access PgAdmin (if enabled)
+# URL: http://localhost:8080
+# Email: hello@example.com
+# Password: secret
+```
+
+## 🚀 Production Deployment
+
+### Environment Configuration
+```bash
+# Set production environment
+APP_ENV=production
+APP_DEBUG=false
+
+# Generate application key
+php artisan key:generate
+
+# Optimize for production
+php artisan config:cache
+php artisan route:cache
+php artisan view:cache
+```
+
+### Queue Workers
+```bash
+# Start production queue workers
+php artisan horizon
+```
+
+## 📝 API Documentation
+
+The API includes comprehensive documentation generated with Scribe:
+
+```bash
+# Generate API documentation
+php artisan scribe:generate
+
+# Access documentation at
+# http://laravel.test/docs
+```
+
+## 🔧 Troubleshooting
+
+### Common Issues
+
+1. **Database Connection Issues**
+   ```bash
+   # Check database connection
+   php artisan tinker
+   DB::connection()->getPdo();
+   ```
+
+2. **Permission Issues**
+   ```bash
+   # Fix storage permissions
+   chmod -R 775 storage bootstrap/cache
+   ```
+
+3. **Queue Not Processing**
+   ```bash
+   # Restart Horizon
+   php artisan horizon:terminate
+   php artisan horizon
+   ```
+
+### Logs
+```bash
+# View application logs
+tail -f storage/logs/laravel.log
+
+# View Horizon logs
+tail -f storage/logs/horizon.log
+```
+
+## 📚 Additional Resources
+
+- [Laravel Documentation](https://laravel.com/docs)
+- [Laravel Sanctum](https://laravel.com/docs/sanctum)
+- [Laravel Horizon](https://laravel.com/docs/horizon)
+- [Laravel Telescope](https://laravel.com/docs/telescope)
+- [Spatie Permission](https://spatie.be/docs/laravel-permission)
+
+## 🤝 Contributing
+
+1. Fork the repository
+2. Create a feature branch
+3. Make your changes
+4. Add tests for new functionality
+5. Submit a pull request
+
+## 📄 License
+
+This project is licensed under the MIT License.
