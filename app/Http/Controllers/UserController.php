@@ -11,6 +11,7 @@ use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Spatie\Permission\Models\Role;
 
 /**
  * @group User Management
@@ -49,9 +50,19 @@ class UserController extends Controller
     {
         try {
             $validated = $request->validated();
+            $roleId = $validated['role_id'] ?? null;
+            unset($validated['role_id']);
 
             // Create user
             $user = User::create($validated);
+
+            // Assign role if provided
+            if ($roleId) {
+                $role = Role::find($roleId);
+                if ($role) {
+                    $user->assignRole($role);
+                }
+            }
 
             return $this->successItem(
                 new UserResource($user),
@@ -97,7 +108,23 @@ class UserController extends Controller
             return $this->notFoundError('User', $id);
         }
         $validated = $request->validated();
+        $roleId = $validated['role_id'] ?? null;
+        unset($validated['role_id']);
+
         $user->update($validated);
+
+        // Update role if provided
+        if ($roleId !== null) {
+            if ($roleId) {
+                $role = Role::find($roleId);
+                if ($role) {
+                    $user->syncRoles([$role]);
+                }
+            } else {
+                // Remove all roles if role_id is empty
+                $user->syncRoles([]);
+            }
+        }
 
         return $this->successItem(
             new UserResource($user),

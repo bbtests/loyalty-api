@@ -8,6 +8,7 @@ use App\Http\Controllers\CashbackController;
 use App\Http\Controllers\CashbackPaymentController;
 use App\Http\Controllers\LoyaltyController;
 use App\Http\Controllers\LoyaltyPointController;
+use App\Http\Controllers\RoleController;
 use App\Http\Controllers\TransactionController;
 use App\Http\Controllers\UserController;
 use Illuminate\Support\Facades\Route;
@@ -54,6 +55,7 @@ Route::middleware('throttle:api')->prefix('v1')->group(function () {
         Route::apiResource('loyalty-points', LoyaltyPointController::class);
         Route::apiResource('transactions', TransactionController::class);
         Route::apiResource('cashback-payments', CashbackPaymentController::class);
+        Route::apiResource('roles', RoleController::class)->only(['index', 'show']);
         Route::get('/users/{user}/achievements', [LoyaltyController::class, 'getUserAchievements']);
         Route::post('/users/{user}/redeem-points', [LoyaltyController::class, 'redeemPoints']);
         Route::post('/cashback/process', [CashbackController::class, 'process']);
