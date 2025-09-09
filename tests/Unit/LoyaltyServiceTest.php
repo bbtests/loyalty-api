@@ -175,7 +175,7 @@ class LoyaltyServiceTest extends TestCase
         ]);
 
         // Create achievements
-        $achievement = \App\Models\Achievement::factory()->create([
+        $achievement = Achievement::factory()->create([
             'name' => 'Test Achievement',
             'description' => 'Test Description',
             'badge_icon' => 'test-icon',
@@ -234,7 +234,7 @@ class LoyaltyServiceTest extends TestCase
         $user = User::factory()->create();
 
         // Create an achievement with criteria
-        $achievement = \App\Models\Achievement::factory()->create([
+        $achievement = Achievement::factory()->create([
             'name' => 'Transaction Master',
             'is_active' => true,
             'criteria' => ['transaction_count' => 2],
@@ -254,14 +254,14 @@ class LoyaltyServiceTest extends TestCase
             'achievement_id' => $achievement->id,
         ]);
 
-        Event::assertDispatched(\App\Events\AchievementUnlocked::class);
+        Event::assertDispatched(AchievementUnlocked::class);
     }
 
     public function test_check_achievements_skips_already_unlocked(): void
     {
         $user = User::factory()->create();
 
-        $achievement = \App\Models\Achievement::factory()->create([
+        $achievement = Achievement::factory()->create([
             'name' => 'Transaction Master',
             'is_active' => true,
             'criteria' => ['transaction_count' => 1],
@@ -273,14 +273,14 @@ class LoyaltyServiceTest extends TestCase
         $this->loyaltyService->checkAchievements($user);
 
         // Should not dispatch event again
-        Event::assertNotDispatched(\App\Events\AchievementUnlocked::class);
+        Event::assertNotDispatched(AchievementUnlocked::class);
     }
 
     public function test_check_achievements_skips_inactive_achievements(): void
     {
         $user = User::factory()->create();
 
-        $achievement = \App\Models\Achievement::factory()->create([
+        $achievement = Achievement::factory()->create([
             'name' => 'Transaction Master',
             'is_active' => false,
             'criteria' => ['transaction_count' => 1],
@@ -293,14 +293,14 @@ class LoyaltyServiceTest extends TestCase
 
         $this->loyaltyService->checkAchievements($user);
 
-        Event::assertNotDispatched(\App\Events\AchievementUnlocked::class);
+        Event::assertNotDispatched(AchievementUnlocked::class);
     }
 
     public function test_check_achievements_handles_null_criteria(): void
     {
         $user = User::factory()->create();
 
-        $achievement = \App\Models\Achievement::factory()->create([
+        $achievement = Achievement::factory()->create([
             'name' => 'No Criteria',
             'is_active' => true,
             'criteria' => null,
@@ -308,14 +308,14 @@ class LoyaltyServiceTest extends TestCase
 
         $this->loyaltyService->checkAchievements($user);
 
-        Event::assertNotDispatched(\App\Events\AchievementUnlocked::class);
+        Event::assertNotDispatched(AchievementUnlocked::class);
     }
 
     public function test_check_achievements_handles_empty_criteria(): void
     {
         $user = User::factory()->create();
 
-        $achievement = \App\Models\Achievement::factory()->create([
+        $achievement = Achievement::factory()->create([
             'name' => 'Empty Criteria',
             'is_active' => true,
             'criteria' => [],
@@ -323,14 +323,14 @@ class LoyaltyServiceTest extends TestCase
 
         $this->loyaltyService->checkAchievements($user);
 
-        Event::assertNotDispatched(\App\Events\AchievementUnlocked::class);
+        Event::assertNotDispatched(AchievementUnlocked::class);
     }
 
     public function test_check_achievements_handles_points_earned_criteria(): void
     {
         $user = User::factory()->create();
 
-        $achievement = \App\Models\Achievement::factory()->create([
+        $achievement = Achievement::factory()->create([
             'name' => 'Points Master',
             'is_active' => true,
             'criteria' => ['points_earned' => 500],
@@ -350,6 +350,6 @@ class LoyaltyServiceTest extends TestCase
             'achievement_id' => $achievement->id,
         ]);
 
-        Event::assertDispatched(\App\Events\AchievementUnlocked::class);
+        Event::assertDispatched(AchievementUnlocked::class);
     }
 }
