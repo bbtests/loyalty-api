@@ -156,7 +156,7 @@ The API uses Laravel Sanctum for authentication:
 
 ### Default Admin User
 - **Email**: `superadmin@example.com`
-- **Password**: `password`
+- **Password**: `P@ssword!`
 - **Role**: Super Admin
 
 ### API Authentication
@@ -167,7 +167,7 @@ curl -X POST "http://laravel.test/api/v1/auth/login" \
   -H "Content-Type: application/json" \
   -d '{
     "email": "superadmin@example.com",
-    "password": "password"
+    "password": "P@ssword!"
   }'
 
 # Use token in subsequent requests
