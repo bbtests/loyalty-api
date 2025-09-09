@@ -27,11 +27,13 @@ class Achievement extends Model
         'points_required',
         'badge_icon',
         'is_active',
+        'criteria',
     ];
 
     protected $casts = [
         'points_required' => 'integer',
         'is_active' => 'boolean',
+        'criteria' => 'array',
     ];
 
     /**

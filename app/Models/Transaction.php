@@ -13,7 +13,7 @@ use Illuminate\Database\Eloquent\Relations\HasOne;
  * @property float $amount
  * @property int $points_earned
  * @property string $transaction_type
- * @property string $external_transaction_id
+ * @property string|null $external_transaction_id
  * @property string $status
  * @property array<string, mixed> $metadata
  * @property \Carbon\Carbon $created_at

@@ -32,13 +32,19 @@ class LoyaltyService
             ]);
 
             // Update or create loyalty points record
-            /** @var LoyaltyPoint $loyaltyPoints */
-            $loyaltyPoints = $user->loyaltyPoints ?? new LoyaltyPoint(['user_id' => $user->id]);
-            $loyaltyPoints->addPoints($pointsEarned);
+            $loyaltyPoints = $user->loyaltyPoints;
 
-            if (! $loyaltyPoints->exists) {
+            if (! $loyaltyPoints) {
+                $loyaltyPoints = new LoyaltyPoint([
+                    'user_id' => $user->id,
+                    'points' => 0,
+                    'total_earned' => 0,
+                    'total_redeemed' => 0,
+                ]);
                 $loyaltyPoints->save();
             }
+
+            $loyaltyPoints->addPoints($pointsEarned);
 
             // Dispatch event for achievement/badge checking
             event(new PurchaseProcessed($user, $transaction));
@@ -148,7 +154,7 @@ class LoyaltyService
         $achievements = \App\Models\Achievement::where('is_active', true)->get();
 
         foreach ($achievements as $achievement) {
-            $criteria = json_decode($achievement->criteria, true);
+            $criteria = $achievement->criteria;
 
             // Skip if criteria is null or empty
             if (! $criteria) {
