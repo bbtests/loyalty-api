@@ -67,25 +67,114 @@ docker compose --profile api up -d
 # - Redis cache
 # - Horizon queue worker
 # - Scheduler
+# - Mailpit (http://localhost:8025) - Email testing
 # - PgAdmin (optional)
 # - Meilisearch (optional)
-# - Mailpit (optional)
 ```
 
-### Option 2: Run API + Client Together
+### Option 2: Run API + Client Together (Full Stack)
 
-From the root directory, start both services:
+This option runs both the Laravel API and Next.js client together. You need both repositories cloned in the correct structure.
+
+#### Project Structure Setup
+
+First, ensure you have the correct project structure:
+
+```
+bumpa/
+├── api/                    # Laravel API (this repository)
+│   ├── app/
+│   ├── config/
+│   ├── database/
+│   ├── docker-compose.yml  # Main compose file for full stack
+│   └── ...
+└── client/                 # Next.js Client (separate repository)
+    ├── app/
+    ├── components/
+    ├── package.json
+    ├── docker-compose.yml
+    └── ...
+```
+
+#### Cloning Instructions
+
+1. **Clone the API repository:**
+   ```bash
+   git clone https://github.com/bbtests/loyalty-api.git api
+   ```
+
+2. **Clone the Client repository:**
+   ```bash
+   # From the bumpa directory
+   git clone https://github.com/bbtests/loyalty-client.git client
+   ```
+
+   **Note:** The client repository is a Next.js application with TypeScript, featuring:
+   - Admin dashboard with user management
+   - Loyalty program interface
+   - Authentication system with NextAuth.js
+   - Redux Toolkit Query for state management
+   - shadcn/ui components with Tailwind CSS
+
+3. **Verify the structure:**
+   ```bash
+   ls -la
+   # Should show: api/ and client/ directories
+   
+   # Navigate to api directory to run Docker commands
+   cd api
+   ls -la docker-compose.yml
+   # Should show the main docker-compose.yml file
+   ```
+
+#### Running the Full Stack
+
+From the `api/` directory (where the main docker-compose.yml is located):
 
 ```bash
+# Navigate to the api directory
+cd api
+
 # Start both API and Client
 docker compose --profile default up -d
 ```
 
-### Option 3: Run Everything (Full Stack)
+This will start:
+- Laravel API (localhost:80)
+- Next.js Client (localhost:3000)
+- PostgreSQL database
+- Redis cache
+- Horizon queue worker
+- Scheduler
+- Mailpit (http://localhost:8025) - Email testing
 
+#### Troubleshooting Full Stack Setup
+
+**Issue: "docker-compose.yml not found"**
 ```bash
-# Start all services including development tools
-docker compose up -d
+# Make sure you're in the api/ directory
+pwd
+# Should show: /path/to/bumpa/api
+
+# Check if docker-compose.yml exists
+ls -la docker-compose.yml
+```
+
+**Issue: "Client not starting"**
+```bash
+# From the api/ directory, verify client directory exists
+ls -la ../client/
+
+# Check if client has its own docker-compose.yml
+ls -la ../client/docker-compose.yml
+```
+
+**Issue: "Port conflicts"**
+```bash
+# Check if ports are already in use
+lsof -i :3000  # Next.js client
+lsof -i :80    # Laravel API
+lsof -i :8025  # Mailpit
 ```
 
 ## 🔧 Local Development Setup
@@ -250,6 +339,102 @@ php artisan test --testsuite=Unit
 php artisan test --coverage
 ```
 
+## 📧 Email & Notification Handling
+
+### Mailpit - Email Testing & Development
+
+The API uses **Mailpit** for email testing and development. Mailpit is a lightweight SMTP testing tool that captures all outgoing emails without actually sending them.
+
+#### Accessing Mailpit
+
+When running with Docker, Mailpit is available at:
+- **Web Interface**: `http://localhost:8025`
+- **SMTP Server**: `localhost:1025`
+
+#### Features
+
+- **Email Capture**: All outgoing emails are captured and displayed in the web interface
+- **Email Preview**: View HTML and text versions of emails
+- **Email Search**: Search through captured emails by sender, recipient, or content
+- **Email Download**: Download emails as `.eml` files for testing
+- **SMTP Testing**: Test email sending without external dependencies
+
+#### Configuration
+
+Mailpit is automatically configured in the Docker setup. For local development, update your `.env` file:
+
+```bash
+# Mail Configuration for Mailpit
+MAIL_MAILER=smtp
+MAIL_HOST=localhost
+MAIL_PORT=1025
+MAIL_USERNAME=null
+MAIL_PASSWORD=null
+MAIL_ENCRYPTION=null
+MAIL_FROM_ADDRESS="noreply@bumpa.com"
+MAIL_FROM_NAME="${APP_NAME}"
+```
+
+#### Testing Notifications
+
+The API sends various types of notifications:
+
+1. **Achievement Unlocked**: When users unlock new achievements
+2. **Badge Earned**: When users earn new badges
+3. **Cashback Processed**: When cashback payments are processed
+4. **Welcome Emails**: New user registration confirmations
+5. **Password Reset**: Password reset links and confirmations
+
+#### Viewing Notifications in Mailpit
+
+1. **Access Mailpit**: Navigate to `http://localhost:8025`
+2. **View Emails**: All sent emails appear in the inbox
+3. **Email Details**: Click on any email to view:
+   - Sender and recipient information
+   - Email subject and content
+   - HTML and text versions
+   - Email headers and metadata
+4. **Search & Filter**: Use the search bar to find specific emails
+5. **Download**: Save emails as `.eml` files for testing
+
+#### Email Templates
+
+The API includes customizable email templates for:
+- Achievement notifications with badge icons
+- Badge earned notifications with tier information
+- Cashback payment confirmations with transaction details
+- Welcome emails with onboarding information
+
+#### Development Workflow
+
+```bash
+# 1. Start the API with Mailpit
+docker compose --profile api up -d
+
+# 2. Trigger an action that sends an email (e.g., unlock achievement)
+curl -X POST "http://laravel.test/api/v1/achievements/unlock" \
+  -H "Authorization: Bearer YOUR_TOKEN"
+
+# 3. Check Mailpit for the notification
+# Visit: http://localhost:8025
+```
+
+#### Production Email Configuration
+
+For production, replace Mailpit with a real SMTP service:
+
+```bash
+# Production Mail Configuration
+MAIL_MAILER=smtp
+MAIL_HOST=smtp.your-provider.com
+MAIL_PORT=587
+MAIL_USERNAME=your-email@domain.com
+MAIL_PASSWORD=your-email-password
+MAIL_ENCRYPTION=tls
+MAIL_FROM_ADDRESS="noreply@yourdomain.com"
+MAIL_FROM_NAME="${APP_NAME}"
+```
+
 ## 📈 Monitoring & Debugging
 
 ### Laravel Telescope
@@ -283,6 +468,14 @@ Access the Horizon dashboard at `http://laravel.test/horizon` for:
 # URL: http://localhost:8080
 # Email: hello@example.com
 # Password: secret
+```
+
+### Email Testing
+```bash
+# Access Mailpit for email testing
+# URL: http://localhost:8025
+# All outgoing emails are captured here
+# No login required - just view captured emails
 ```
 
 ## 🚀 Production Deployment
