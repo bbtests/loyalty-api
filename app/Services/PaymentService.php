@@ -2,479 +2,436 @@
 
 namespace App\Services;
 
+use App\Contracts\PaymentProviderInterface;
 use App\Models\User;
-use Illuminate\Support\Facades\Cache;
-use Illuminate\Support\Facades\Http;
+use App\Services\Payment\Providers\FlutterwaveProvider;
+use App\Services\Payment\Providers\PaystackProvider;
+use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\Log;
 
 class PaymentService
 {
-    private string $provider;
+    private string $defaultProvider;
 
-    private string $secretKey;
+    /** @var array<string, mixed> */
+    private array $config;
 
-    private string $publicKey;
-
-    private string $baseUrl;
+    /** @var array<string, string> */
+    private array $providers = [];
 
     public function __construct()
     {
-        $this->provider = config('payment.default_provider', 'paystack');
-        $this->secretKey = config("payment.providers.{$this->provider}.secret_key");
-        $this->publicKey = config("payment.providers.{$this->provider}.public_key");
-        $this->baseUrl = config("payment.providers.{$this->provider}.base_url");
-    }
-
-    public function getPublicKey(): string
-    {
-        return $this->publicKey;
+        $this->config = Config::get('payment', []);
+        $this->defaultProvider = $this->config['default_provider'] ?? 'paystack';
+        $this->initializeProviders();
     }
 
     /**
+     * Initialize all available payment providers
+     */
+    private function initializeProviders(): void
+    {
+        $this->providers = [
+            'paystack' => PaystackProvider::class,
+            'flutterwave' => FlutterwaveProvider::class,
+        ];
+
+        Log::info('Payment providers initialized', [
+            'providers' => array_keys($this->providers),
+            'default' => $this->defaultProvider,
+        ]);
+    }
+
+    /**
+     * Create a payment provider instance
+     */
+    private function createProvider(string $providerName): PaymentProviderInterface
+    {
+        if (! isset($this->providers[$providerName])) {
+            throw new \InvalidArgumentException("Payment provider '{$providerName}' not found");
+        }
+
+        $providerClass = $this->providers[$providerName];
+        $config = $this->config['providers'][$providerName] ?? [];
+
+        return new $providerClass($config);
+    }
+
+    /**
+     * Get a payment provider instance
+     */
+    public function getProvider(?string $provider = null): PaymentProviderInterface
+    {
+        $provider = $provider ?? $this->defaultProvider;
+
+        if (! isset($this->providers[$provider])) {
+            throw new \InvalidArgumentException("Payment provider '{$provider}' not found");
+        }
+
+        $providerInstance = $this->createProvider($provider);
+
+        if (! $providerInstance->isAvailable()) {
+            throw new \RuntimeException("Payment provider '{$provider}' is not available");
+        }
+
+        return $providerInstance;
+    }
+
+    /**
+     * Get all available providers
+     *
+     * @return array<string, PaymentProviderInterface>
+     */
+    public function getAvailableProviders(): array
+    {
+        $availableProviders = [];
+
+        foreach ($this->providers as $name => $providerClass) {
+            try {
+                $provider = $this->createProvider($name);
+                if ($provider->isAvailable()) {
+                    $availableProviders[$name] = $provider;
+                }
+            } catch (\Exception $e) {
+                Log::warning("Failed to create provider {$name}", [
+                    'error' => $e->getMessage(),
+                ]);
+            }
+        }
+
+        return $availableProviders;
+    }
+
+    /**
+     * Initialize payment transaction
+     *
      * @return array<string, mixed>
      */
-    public function processCashback(User $user, float $amount): array
+    public function initializePayment(User $user, float $amount, string $reference, ?string $provider = null): array
     {
-        switch ($this->provider) {
-            case 'paystack':
-                return $this->processPaystackCashback($user, $amount);
-            case 'flutterwave':
-                return $this->processFlutterwaveCashback($user, $amount);
-            default:
-                return $this->processMockCashback($user, $amount);
+        try {
+            $providerInstance = $this->getProvider($provider);
+
+            Log::info('Initializing payment', [
+                'provider' => $providerInstance->getName(),
+                'user_id' => $user->id,
+                'amount' => $amount,
+                'reference' => $reference,
+            ]);
+
+            return $providerInstance->initializePayment($user, $amount, $reference);
+        } catch (\Exception $e) {
+            Log::error('Payment initialization failed', [
+                'user_id' => $user->id,
+                'amount' => $amount,
+                'reference' => $reference,
+                'provider' => $provider,
+                'error' => $e->getMessage(),
+            ]);
+
+            return [
+                'status' => 'error',
+                'error' => 'Payment initialization failed: '.$e->getMessage(),
+            ];
         }
     }
 
     /**
+     * Verify payment transaction
+     *
      * @return array<string, mixed>
      */
-    private function processPaystackCashback(User $user, float $amount): array
+    public function verifyPayment(string $reference, ?string $provider = null): array
     {
         try {
-            // First, ensure user has a transfer recipient
-            $recipientCode = $this->getOrCreatePaystackRecipient($user);
+            $providerInstance = $this->getProvider($provider);
 
-            if (! $recipientCode) {
-                throw new \Exception('Failed to create transfer recipient');
-            }
-
-            $response = Http::withHeaders([
-                'Authorization' => 'Bearer '.$this->secretKey,
-                'Content-Type' => 'application/json',
-            ])->post($this->baseUrl.'/transfer', [
-                'source' => 'balance',
-                'amount' => $amount * 100, // Convert to kobo
-                'recipient' => $recipientCode,
-                'reason' => 'Loyalty Program Cashback',
-                'reference' => 'cashback_'.uniqid().'_'.$user->id,
-                'currency' => 'NGN',
+            Log::info('Verifying payment', [
+                'provider' => $providerInstance->getName(),
+                'reference' => $reference,
             ]);
 
-            if ($response->successful()) {
-                $data = $response->json();
+            return $providerInstance->verifyPayment($reference);
+        } catch (\Exception $e) {
+            Log::error('Payment verification failed', [
+                'reference' => $reference,
+                'provider' => $provider,
+                'error' => $e->getMessage(),
+            ]);
 
-                Log::info('Paystack cashback successful', [
+            return [
+                'status' => 'error',
+                'error' => 'Payment verification failed: '.$e->getMessage(),
+            ];
+        }
+    }
+
+    /**
+     * Process cashback payment
+     *
+     * @return array<string, mixed>
+     */
+    public function processCashback(User $user, float $amount, ?string $provider = null): array
+    {
+        try {
+            $providerInstance = $this->getProvider($provider);
+
+            Log::info('Processing cashback', [
+                'provider' => $providerInstance->getName(),
+                'user_id' => $user->id,
+                'amount' => $amount,
+            ]);
+
+            return $providerInstance->processCashback($user, $amount);
+        } catch (\Exception $e) {
+            Log::error('Cashback processing failed', [
+                'user_id' => $user->id,
+                'amount' => $amount,
+                'provider' => $provider,
+                'error' => $e->getMessage(),
+            ]);
+
+            return [
+                'status' => 'error',
+                'error' => 'Cashback processing failed: '.$e->getMessage(),
+            ];
+        }
+    }
+
+    /**
+     * Get public key for provider
+     */
+    public function getPublicKey(?string $provider = null): string
+    {
+        $providerInstance = $this->getProvider($provider);
+        $config = $providerInstance->getConfig();
+
+        return $config['public_key'] ?? '';
+    }
+
+    /**
+     * Get supported currencies across all providers
+     *
+     * @return array<string>
+     */
+    public function getSupportedCurrencies(): array
+    {
+        $currencies = [];
+
+        foreach ($this->getAvailableProviders() as $provider) {
+            $currencies = array_merge($currencies, $provider->getSupportedCurrencies());
+        }
+
+        return array_unique($currencies);
+    }
+
+    /**
+     * Get minimum amount across all providers
+     */
+    public function getMinimumAmount(): float
+    {
+        $amounts = [];
+
+        foreach ($this->getAvailableProviders() as $provider) {
+            $amounts[] = $provider->getMinimumAmount();
+        }
+
+        return empty($amounts) ? 1.0 : min($amounts);
+    }
+
+    /**
+     * Get maximum amount across all providers
+     */
+    public function getMaximumAmount(): float
+    {
+        $amounts = [];
+
+        foreach ($this->getAvailableProviders() as $provider) {
+            $amounts[] = $provider->getMaximumAmount();
+        }
+
+        return empty($amounts) ? 1000000.0 : max($amounts);
+    }
+
+    /**
+     * Check if a provider is available
+     */
+    public function isProviderAvailable(string $provider): bool
+    {
+        if (! isset($this->providers[$provider])) {
+            return false;
+        }
+
+        try {
+            $providerInstance = $this->createProvider($provider);
+
+            return $providerInstance->isAvailable();
+        } catch (\Exception $e) {
+            return false;
+        }
+    }
+
+    /**
+     * Get provider information
+     *
+     * @return array<string, mixed>
+     */
+    public function getProviderInfo(?string $provider = null): array
+    {
+        $providerInstance = $this->getProvider($provider);
+
+        return [
+            'name' => $providerInstance->getName(),
+            'available' => $providerInstance->isAvailable(),
+            'supported_currencies' => $providerInstance->getSupportedCurrencies(),
+            'minimum_amount' => $providerInstance->getMinimumAmount(),
+            'maximum_amount' => $providerInstance->getMaximumAmount(),
+        ];
+    }
+
+    /**
+     * Get all providers information
+     *
+     * @return array<string, array<string, mixed>>
+     */
+    public function getAllProvidersInfo(): array
+    {
+        $info = [];
+
+        foreach ($this->providers as $name => $providerClass) {
+            try {
+                $provider = $this->createProvider($name);
+                $info[$name] = [
+                    'name' => $provider->getName(),
+                    'available' => $provider->isAvailable(),
+                    'supported_currencies' => $provider->getSupportedCurrencies(),
+                    'minimum_amount' => $provider->getMinimumAmount(),
+                    'maximum_amount' => $provider->getMaximumAmount(),
+                ];
+            } catch (\Exception $e) {
+                $info[$name] = [
+                    'name' => $name,
+                    'available' => false,
+                    'error' => $e->getMessage(),
+                ];
+            }
+        }
+
+        return $info;
+    }
+
+    /**
+     * Get payment configuration summary
+     *
+     * @return array<string, mixed>
+     */
+    public function getConfiguration(): array
+    {
+        return [
+            'providers' => $this->getAllProvidersInfo(),
+            'supported_currencies' => $this->getSupportedCurrencies(),
+            'amount_limits' => [
+                'minimum' => $this->getMinimumAmount(),
+                'maximum' => $this->getMaximumAmount(),
+            ],
+            'default_provider' => $this->defaultProvider,
+        ];
+    }
+
+    /**
+     * Process payment with fallback providers
+     *
+     * @param  array<string>|null  $preferredProviders
+     * @return array<string, mixed>
+     */
+    public function processPaymentWithFallback(User $user, float $amount, string $reference, ?array $preferredProviders = null): array
+    {
+        $providers = $preferredProviders ?? ['paystack', 'flutterwave'];
+
+        foreach ($providers as $providerName) {
+            try {
+                if ($this->isProviderAvailable($providerName)) {
+                    $result = $this->initializePayment($user, $amount, $reference, $providerName);
+
+                    if ($result['status'] === 'success') {
+                        return $result;
+                    }
+                }
+            } catch (\Exception $e) {
+                Log::warning("Provider {$providerName} failed, trying next", [
+                    'error' => $e->getMessage(),
                     'user_id' => $user->id,
                     'amount' => $amount,
-                    'transfer_code' => $data['data']['transfer_code'],
                 ]);
 
-                return [
-                    'status' => 'completed',
-                    'transaction_id' => $data['data']['transfer_code'],
-                    'provider_response' => $data,
-                    'reference' => $data['data']['reference'],
-                ];
+                continue;
             }
-
-            throw new \Exception('Payment failed: '.$response->body());
-        } catch (\Exception $e) {
-            Log::error('Paystack cashback failed', [
-                'user_id' => $user->id,
-                'amount' => $amount,
-                'error' => $e->getMessage(),
-            ]);
-
-            return [
-                'status' => 'failed',
-                'error' => $e->getMessage(),
-            ];
-        }
-    }
-
-    /**
-     * @return array<string, mixed>
-     */
-    private function processFlutterwaveCashback(User $user, float $amount): array
-    {
-        try {
-            $response = Http::withHeaders([
-                'Authorization' => 'Bearer '.$this->secretKey,
-                'Content-Type' => 'application/json',
-            ])->post($this->baseUrl.'/transfers', [
-                'account_bank' => $user->bank_code ?? '044', // Default to Access Bank
-                'account_number' => $user->account_number ?? '0123456789',
-                'amount' => $amount,
-                'narration' => 'Loyalty Program Cashback',
-                'currency' => 'NGN',
-                'reference' => 'fw_cashback_'.uniqid().'_'.$user->id,
-                'callback_url' => config('app.url').'/api/webhooks/flutterwave',
-                'debit_currency' => 'NGN',
-            ]);
-
-            if ($response->successful()) {
-                $data = $response->json();
-
-                if ($data['status'] === 'success') {
-                    Log::info('Flutterwave cashback initiated', [
-                        'user_id' => $user->id,
-                        'amount' => $amount,
-                        'transfer_id' => $data['data']['id'],
-                    ]);
-
-                    return [
-                        'status' => 'pending',
-                        'transaction_id' => $data['data']['id'],
-                        'provider_response' => $data,
-                        'reference' => $data['data']['reference'],
-                    ];
-                }
-            }
-
-            throw new \Exception('Flutterwave transfer failed: '.$response->body());
-        } catch (\Exception $e) {
-            Log::error('Flutterwave cashback failed', [
-                'user_id' => $user->id,
-                'amount' => $amount,
-                'error' => $e->getMessage(),
-            ]);
-
-            return [
-                'status' => 'failed',
-                'error' => $e->getMessage(),
-            ];
-        }
-    }
-
-    /**
-     * @return array<string, mixed>
-     */
-    private function processMockCashback(User $user, float $amount): array
-    {
-        // Simulate different scenarios for testing
-        $scenarios = [
-            ['status' => 'completed', 'probability' => 70],
-            ['status' => 'pending', 'probability' => 20],
-            ['status' => 'failed', 'probability' => 10],
-        ];
-
-        $random = rand(1, 100);
-        $cumulative = 0;
-        $selectedStatus = 'completed';
-
-        foreach ($scenarios as $scenario) {
-            $cumulative += $scenario['probability'];
-            if ($random <= $cumulative) {
-                $selectedStatus = $scenario['status'];
-                break;
-            }
-        }
-
-        if ($selectedStatus === 'failed') {
-            return [
-                'status' => 'failed',
-                'error' => 'Mock payment failure for testing - insufficient balance',
-            ];
         }
 
         return [
-            'status' => $selectedStatus,
-            'transaction_id' => 'mock_'.uniqid(),
-            'provider_response' => [
-                'mock' => true,
-                'amount' => $amount,
-                'user_id' => $user->id,
-                'processed_at' => now(),
-                'scenario' => $selectedStatus,
-            ],
-            'reference' => 'mock_ref_'.uniqid(),
+            'status' => 'error',
+            'error' => 'All payment providers failed',
         ];
     }
 
-    private function getOrCreatePaystackRecipient(User $user): ?string
-    {
-        // Check cache first
-        $cacheKey = "paystack_recipient_{$user->id}";
-        $cachedRecipient = Cache::get($cacheKey);
-
-        if ($cachedRecipient) {
-            return $cachedRecipient;
-        }
-
-        try {
-            // Create transfer recipient
-            $response = Http::withHeaders([
-                'Authorization' => 'Bearer '.$this->secretKey,
-                'Content-Type' => 'application/json',
-            ])->post($this->baseUrl.'/transferrecipient', [
-                'type' => 'nuban',
-                'name' => $user->name,
-                'account_number' => $user->account_number ?? '0123456789', // Mock account
-                'bank_code' => $user->bank_code ?? '044', // Access Bank
-                'currency' => 'NGN',
-            ]);
-
-            if ($response->successful()) {
-                $data = $response->json();
-                $recipientCode = $data['data']['recipient_code'];
-
-                // Cache for 24 hours
-                Cache::put($cacheKey, $recipientCode, 86400);
-
-                return $recipientCode;
-            }
-
-            Log::error('Failed to create Paystack recipient', [
-                'user_id' => $user->id,
-                'response' => $response->body(),
-            ]);
-
-        } catch (\Exception $e) {
-            Log::error('Exception creating Paystack recipient', [
-                'user_id' => $user->id,
-                'error' => $e->getMessage(),
-            ]);
-        }
-
-        return null;
-    }
-
     /**
+     * Process cashback with fallback providers
+     *
+     * @param  array<string>|null  $preferredProviders
      * @return array<string, mixed>
      */
-    public function initializePayment(User $user, float $amount, string $reference): array
+    public function processCashbackWithFallback(User $user, float $amount, ?array $preferredProviders = null): array
     {
-        switch ($this->provider) {
-            case 'paystack':
-                return $this->initializePaystackPayment($user, $amount, $reference);
-            case 'flutterwave':
-                return $this->initializeFlutterwavePayment($user, $amount, $reference);
-            default:
-                return $this->initializeMockPayment($user, $amount, $reference);
-        }
-    }
+        $providers = $preferredProviders ?? ['paystack', 'flutterwave'];
 
-    /**
-     * @return array<string, mixed>
-     */
-    private function initializePaystackPayment(User $user, float $amount, string $reference): array
-    {
-        try {
-            $response = Http::withHeaders([
-                'Authorization' => 'Bearer '.$this->secretKey,
-                'Content-Type' => 'application/json',
-            ])->post($this->baseUrl.'/transaction/initialize', [
-                'amount' => $amount * 100, // Convert to kobo
-                'email' => $user->email,
-                'reference' => $reference,
-                'callback_url' => config('app.url').'/payment/callback',
-                'metadata' => [
+        foreach ($providers as $providerName) {
+            try {
+                if ($this->isProviderAvailable($providerName)) {
+                    $result = $this->processCashback($user, $amount, $providerName);
+
+                    if ($result['status'] === 'success') {
+                        return $result;
+                    }
+                }
+            } catch (\Exception $e) {
+                Log::warning("Provider {$providerName} failed, trying next", [
+                    'error' => $e->getMessage(),
                     'user_id' => $user->id,
-                    'loyalty_program' => true,
-                ],
-            ]);
+                    'amount' => $amount,
+                ]);
 
-            if ($response->successful()) {
-                $data = $response->json();
-
-                return [
-                    'status' => 'success',
-                    'authorization_url' => $data['data']['authorization_url'],
-                    'access_code' => $data['data']['access_code'],
-                    'reference' => $data['data']['reference'],
-                ];
+                continue;
             }
-
-            throw new \Exception('Payment initialization failed: '.$response->body());
-        } catch (\Exception $e) {
-            Log::error('Paystack payment initialization failed', [
-                'user_id' => $user->id,
-                'amount' => $amount,
-                'error' => $e->getMessage(),
-            ]);
-
-            return [
-                'status' => 'error',
-                'message' => $e->getMessage(),
-            ];
         }
-    }
 
-    /**
-     * @return array<string, mixed>
-     */
-    private function initializeFlutterwavePayment(User $user, float $amount, string $reference): array
-    {
-        try {
-            $response = Http::withHeaders([
-                'Authorization' => 'Bearer '.$this->secretKey,
-                'Content-Type' => 'application/json',
-            ])->post($this->baseUrl.'/payments', [
-                'tx_ref' => $reference,
-                'amount' => $amount,
-                'currency' => 'NGN',
-                'redirect_url' => config('app.url').'/payment/callback',
-                'customer' => [
-                    'email' => $user->email,
-                    'name' => $user->name,
-                ],
-                'customizations' => [
-                    'title' => 'Loyalty Program Purchase',
-                    'description' => 'Purchase with loyalty points earning',
-                ],
-                'meta' => [
-                    'user_id' => $user->id,
-                    'loyalty_program' => true,
-                ],
-            ]);
-
-            if ($response->successful()) {
-                $data = $response->json();
-
-                return [
-                    'status' => 'success',
-                    'authorization_url' => $data['data']['link'],
-                    'reference' => $reference,
-                ];
-            }
-
-            throw new \Exception('Flutterwave payment initialization failed: '.$response->body());
-        } catch (\Exception $e) {
-            Log::error('Flutterwave payment initialization failed', [
-                'user_id' => $user->id,
-                'amount' => $amount,
-                'error' => $e->getMessage(),
-            ]);
-
-            return [
-                'status' => 'error',
-                'message' => $e->getMessage(),
-            ];
-        }
-    }
-
-    /**
-     * @return array<string, mixed>
-     */
-    private function initializeMockPayment(User $user, float $amount, string $reference): array
-    {
         return [
-            'status' => 'success',
-            'authorization_url' => config('app.url').'/payment/mock?reference='.$reference,
-            'reference' => $reference,
-            'mock' => true,
+            'status' => 'error',
+            'error' => 'All cashback providers failed',
         ];
     }
 
     /**
-     * @return array<string, mixed>
+     * Register a new provider dynamically
      */
-    public function verifyPayment(string $reference): array
+    public function registerProvider(string $name, string $providerClass): void
     {
-        switch ($this->provider) {
-            case 'paystack':
-                return $this->verifyPaystackPayment($reference);
-            case 'flutterwave':
-                return $this->verifyFlutterwavePayment($reference);
-            default:
-                return $this->verifyMockPayment($reference);
-        }
+        $this->providers[$name] = $providerClass;
+
+        Log::info('New payment provider registered', [
+            'name' => $name,
+            'class' => $providerClass,
+        ]);
     }
 
     /**
-     * @return array<string, mixed>
+     * Unregister a provider
      */
-    private function verifyPaystackPayment(string $reference): array
+    public function unregisterProvider(string $name): void
     {
-        try {
-            $response = Http::withHeaders([
-                'Authorization' => 'Bearer '.$this->secretKey,
-            ])->get($this->baseUrl.'/transaction/verify/'.$reference);
+        unset($this->providers[$name]);
 
-            if ($response->successful()) {
-                $data = $response->json();
-
-                if ($data['data']['status'] === 'success') {
-                    return [
-                        'status' => 'success',
-                        'amount' => $data['data']['amount'] / 100, // Convert from kobo
-                        'reference' => $data['data']['reference'],
-                        'customer_email' => $data['data']['customer']['email'],
-                        'metadata' => $data['data']['metadata'],
-                    ];
-                }
-            }
-
-            return ['status' => 'failed', 'message' => 'Payment verification failed'];
-
-        } catch (\Exception $e) {
-            Log::error('Paystack payment verification failed', [
-                'reference' => $reference,
-                'error' => $e->getMessage(),
-            ]);
-
-            return ['status' => 'error', 'message' => $e->getMessage()];
-        }
-    }
-
-    /**
-     * @return array<string, mixed>
-     */
-    private function verifyFlutterwavePayment(string $reference): array
-    {
-        try {
-            $response = Http::withHeaders([
-                'Authorization' => 'Bearer '.$this->secretKey,
-            ])->get($this->baseUrl.'/transactions/verify_by_reference?tx_ref='.$reference);
-
-            if ($response->successful()) {
-                $data = $response->json();
-
-                if ($data['status'] === 'success' && $data['data']['status'] === 'successful') {
-                    return [
-                        'status' => 'success',
-                        'amount' => $data['data']['amount'],
-                        'reference' => $data['data']['tx_ref'],
-                        'customer_email' => $data['data']['customer']['email'],
-                        'metadata' => $data['data']['meta'],
-                    ];
-                }
-            }
-
-            return ['status' => 'failed', 'message' => 'Payment verification failed'];
-
-        } catch (\Exception $e) {
-            Log::error('Flutterwave payment verification failed', [
-                'reference' => $reference,
-                'error' => $e->getMessage(),
-            ]);
-
-            return ['status' => 'error', 'message' => $e->getMessage()];
-        }
-    }
-
-    /**
-     * @return array<string, mixed>
-     */
-    private function verifyMockPayment(string $reference): array
-    {
-        // Mock verification - always successful for testing
-        return [
-            'status' => 'success',
-            'amount' => 100.00, // Mock amount
-            'reference' => $reference,
-            'customer_email' => 'test@example.com',
-            'metadata' => ['mock' => true],
-        ];
+        Log::info('Payment provider unregistered', [
+            'name' => $name,
+        ]);
     }
 }

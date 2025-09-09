@@ -33,5 +33,6 @@ return [
         'reset_password' => env('RESET_PASSWORD_URL', '/auth/reset-password'),
         'dashboard' => env('DASHBOARD_URL', '/dashboard'),
         'support' => env('SUPPORT_URL', '/support'),
+        'payment_callback' => env('PAYMENT_CALLBACK_URL', '/dashboard?payment=success'),
     ],
 ];

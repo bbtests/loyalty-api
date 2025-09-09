@@ -8,6 +8,7 @@ use App\Http\Controllers\CashbackController;
 use App\Http\Controllers\CashbackPaymentController;
 use App\Http\Controllers\LoyaltyController;
 use App\Http\Controllers\LoyaltyPointController;
+use App\Http\Controllers\PaymentController;
 use App\Http\Controllers\RoleController;
 use App\Http\Controllers\TransactionController;
 use App\Http\Controllers\UserController;
@@ -59,6 +60,16 @@ Route::middleware('throttle:api')->prefix('v1')->group(function () {
         Route::get('/users/{user}/achievements', [LoyaltyController::class, 'getUserAchievements']);
         Route::post('/users/{user}/redeem-points', [LoyaltyController::class, 'redeemPoints']);
         Route::post('/cashback/process', [CashbackController::class, 'process']);
+
+        // Payment routes
+        Route::prefix('payments')->group(function () {
+            Route::get('/configuration', [PaymentController::class, 'getConfiguration']);
+            Route::get('/providers', [PaymentController::class, 'getProviders']);
+            Route::get('/public-key', [PaymentController::class, 'getPublicKey']);
+            Route::post('/initialize', [PaymentController::class, 'initializePayment']);
+            Route::post('/verify', [PaymentController::class, 'verifyPayment']);
+            Route::post('/cashback', [PaymentController::class, 'processCashback']);
+        });
 
         // Webhook routes (for external payment providers)
         Route::post('/webhooks/payment', [TransactionController::class, 'handlePaymentWebhook']);

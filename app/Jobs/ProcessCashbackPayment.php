@@ -10,6 +10,7 @@ use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
+use Illuminate\Support\Facades\Log;
 
 class ProcessCashbackPayment implements ShouldQueue
 {
@@ -49,8 +50,8 @@ class ProcessCashbackPayment implements ShouldQueue
 
             // Update payment record with result
             $cashbackPayment->update([
-                'provider_transaction_id' => $result['transaction_id'],
-                'status' => $result['status'],
+                'provider_transaction_id' => $result['transaction_id'] ?? null,
+                'status' => $result['status'] ?? 'failed',
                 'payment_details' => $result,
             ]);
 
@@ -69,7 +70,7 @@ class ProcessCashbackPayment implements ShouldQueue
 
     public function failed(\Throwable $exception): void
     {
-        \Log::error('Cashback payment failed', [
+        Log::error('Cashback payment failed', [
             'user_id' => $this->user->id,
             'amount' => $this->amount,
             'error' => $exception->getMessage(),
