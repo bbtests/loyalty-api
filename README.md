@@ -70,6 +70,9 @@ docker compose --profile api up -d
 # - Mailpit (http://localhost:8025) - Email testing
 # - PgAdmin (optional)
 # - Meilisearch (optional)
+
+# After startup, run migrations and seed the database
+docker compose exec  laravel.test php artisan migrate:fresh --seed
 ```
 
 ### Option 2: Run API + Client Together (Full Stack)
@@ -84,13 +87,44 @@ First, ensure you have the correct project structure:
 bumpa/
 ├── api/                    # Laravel API (this repository)
 │   ├── app/
-│   ├── config/
+│   │   ├── Contracts/      # Payment provider interfaces
+│   │   ├── Events/         # Application events
+│   │   ├── Http/           # Controllers, middleware, requests
+│   │   ├── Jobs/           # Queue jobs
+│   │   ├── Listeners/      # Event listeners
+│   │   ├── Models/         # Eloquent models
+│   │   ├── Notifications/ # Email notifications
+│   │   ├── Observers/      # Model observers
+│   │   ├── Policies/       # Authorization policies
+│   │   ├── Providers/      # Service providers
+│   │   ├── Services/       # Business logic services
+│   │   └── Traits/         # Reusable traits
+│   ├── bootstrap/          # Application bootstrap
+│   ├── config/             # Configuration files
 │   ├── database/
+│   │   ├── factories/      # Model factories
+│   │   ├── migrations/     # Database migrations
+│   │   └── seeders/        # Database seeders
+│   ├── docs/               # Documentation
+│   ├── routes/             # API routes
+│   ├── tests/              # Test suites
 │   ├── docker-compose.yml  # Main compose file for full stack
 │   └── ...
 └── client/                 # Next.js Client (separate repository)
-    ├── app/
-    ├── components/
+    ├── app/                # Next.js app router
+    │   ├── auth/           # Authentication pages
+    │   ├── dashboard/      # Dashboard pages
+    │   └── api/            # API routes
+    ├── components/         # React components
+    │   ├── admin/          # Admin-specific components
+    │   ├── payment/        # Payment components
+    │   └── ui/             # Reusable UI components
+    ├── store/              # Redux store slices
+    ├── hooks/              # Custom React hooks
+    ├── lib/                # Utility libraries
+    ├── types/              # TypeScript type definitions
+    ├── __tests__/          # Test files
+    ├── e2e/                # End-to-end tests
     ├── package.json
     ├── docker-compose.yml
     └── ...
@@ -137,6 +171,9 @@ cd api
 
 # Start both API and Client
 docker compose --profile default up -d
+
+# After startup, run migrations and seed the database
+docker compose exec  laravel.test php artisan migrate:fresh --seed
 ```
 
 This will start:
@@ -247,6 +284,20 @@ The API uses Laravel Sanctum for authentication:
 - **Email**: `superadmin@example.com`
 - **Password**: `P@ssword!`
 - **Role**: Super Admin
+
+### Additional Seed Users (from `UserSeeder`)
+When you run the seeders, we also create additional sample users you can use for testing:
+
+- John Smith — Email: `john.smith@example.com`, Password: `password`
+- Sarah Johnson — Email: `sarah.johnson@example.com`, Password: `password`
+- Mike Wilson — Email: `mike.wilson@example.com`, Password: `password`
+
+The seeder also generates 15 random users via factories.
+
+Run just this seeder with:
+```bash
+php artisan db:seed --class=UserSeeder
+```
 
 ### API Authentication
 
