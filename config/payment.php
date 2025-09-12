@@ -22,6 +22,15 @@ return [
             'secret_key' => env('FLUTTERWAVE_SECRET_KEY'),
             'base_url' => env('FLUTTERWAVE_BASE_URL', 'https://api.flutterwave.com/v3'),
         ],
+        'mock' => [
+            'enabled' => env('MOCK_PAYMENT_ENABLED', true),
+            'should_fail' => env('MOCK_PAYMENT_SHOULD_FAIL', false),
+            'failure_rate' => env('MOCK_PAYMENT_FAILURE_RATE', 0.0),
+            'mock_responses' => [
+                'success_rate' => env('MOCK_PAYMENT_SUCCESS_RATE', 0.95),
+                'average_delay_ms' => env('MOCK_PAYMENT_DELAY_MS', 300),
+            ],
+        ],
     ],
 
     /*

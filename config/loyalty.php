@@ -7,7 +7,7 @@ return [
     |--------------------------------------------------------------------------
     */
 
-    'points_per_dollar' => env('LOYALTY_POINTS_PER_DOLLAR', 10),
+    'points_per_currency' => env('LOYALTY_POINTS_PER_CURRENCY', 10),
     'cashback_percentage' => env('CASHBACK_PERCENTAGE', 2),
 
     'achievements' => [
@@ -23,7 +23,7 @@ return [
         ],
         'big_spender' => [
             'name' => 'Big Spender',
-            'description' => 'Spend over $500 in a single transaction',
+            'description' => 'Spend over ₦50,000 in a single transaction',
             'points_required' => 0,
         ],
         'frequent_buyer' => [

@@ -15,7 +15,7 @@ class BadgeSeeder extends Seeder
             [
                 'name' => 'Bronze Member',
                 'description' => 'Welcome to our loyalty program',
-                'requirements' => json_encode(['points_minimum' => 0]),
+                'requirements' => json_encode(['points_minimum' => 1]),
                 'icon' => 'bronze-medal',
                 'tier' => 1,
                 'is_active' => true,

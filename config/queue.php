@@ -74,6 +74,21 @@ return [
             'after_commit' => false,
         ],
 
+        'rabbitmq' => [
+            'driver' => 'rabbitmq',
+            'host' => env('RABBITMQ_HOST', 'localhost'),
+            'port' => env('RABBITMQ_PORT', 5672),
+            'user' => env('RABBITMQ_USER', 'bumpa'),
+            'password' => env('RABBITMQ_PASSWORD', 'bumpa123'),
+            'vhost' => env('RABBITMQ_VHOST', '/'),
+            'queue' => env('RABBITMQ_QUEUE', 'default'),
+            'exchange' => env('RABBITMQ_EXCHANGE', 'default'),
+            'exchange_type' => env('RABBITMQ_EXCHANGE_TYPE', 'direct'),
+            'retry_after' => (int) env('RABBITMQ_RETRY_AFTER', 90),
+            'block_for' => null,
+            'after_commit' => false,
+        ],
+
     ],
 
     /*

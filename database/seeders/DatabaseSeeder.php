@@ -20,9 +20,9 @@ class DatabaseSeeder extends Seeder
             UserSeeder::class,
             BadgeSeeder::class,
             AchievementSeeder::class,
-            LoyaltyPointSeeder::class,
-            UserAchievementSeeder::class,
-            UserBadgeSeeder::class,
+            // LoyaltyPointSeeder::class,
+            // UserAchievementSeeder::class,
+            // UserBadgeSeeder::class,
         ]);
     }
 }

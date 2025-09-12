@@ -32,8 +32,8 @@ class AchievementSeeder extends Seeder
             ],
             [
                 'name' => 'Big Spender',
-                'description' => 'Spend over $500 in a single transaction',
-                'points_required' => 0,
+                'description' => 'Spend over ₦50,000 in a single transaction',
+                'points_required' => 50000,
                 'badge_icon' => 'diamond',
                 'is_active' => true,
                 'created_at' => now(),
