@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Contracts\PaymentProviderInterface;
 use App\Models\User;
 use App\Services\Payment\Providers\FlutterwaveProvider;
+use App\Services\Payment\Providers\MockPaymentProvider;
 use App\Services\Payment\Providers\PaystackProvider;
 use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\Log;
@@ -34,6 +35,7 @@ class PaymentService
         $this->providers = [
             'paystack' => PaystackProvider::class,
             'flutterwave' => FlutterwaveProvider::class,
+            'mock' => MockPaymentProvider::class,
         ];
 
         Log::info('Payment providers initialized', [
@@ -107,7 +109,7 @@ class PaymentService
      *
      * @return array<string, mixed>
      */
-    public function initializePayment(User $user, float $amount, string $reference, ?string $provider = null): array
+    public function initializePayment(User $user, float $amount, string $reference, ?string $provider = null, ?string $callbackUrl = null): array
     {
         try {
             $providerInstance = $this->getProvider($provider);
@@ -119,7 +121,7 @@ class PaymentService
                 'reference' => $reference,
             ]);
 
-            return $providerInstance->initializePayment($user, $amount, $reference);
+            return $providerInstance->initializePayment($user, $amount, $reference, $callbackUrl);
         } catch (\Exception $e) {
             Log::error('Payment initialization failed', [
                 'user_id' => $user->id,

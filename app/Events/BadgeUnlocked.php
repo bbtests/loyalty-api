@@ -4,22 +4,17 @@ namespace App\Events;
 
 use App\Models\Badge;
 use App\Models\User;
-use Illuminate\Broadcasting\InteractsWithSockets;
 use Illuminate\Broadcasting\PrivateChannel;
-use Illuminate\Contracts\Broadcasting\ShouldBroadcast;
-use Illuminate\Foundation\Events\Dispatchable;
-use Illuminate\Queue\SerializesModels;
 
-class BadgeUnlocked implements ShouldBroadcast
+class BadgeUnlocked extends BaseBroadcastEvent
 {
-    use Dispatchable, InteractsWithSockets, SerializesModels;
-
     public User $user;
 
     public Badge $badge;
 
     public function __construct(User $user, Badge $badge)
     {
+        parent::__construct();
         $this->user = $user;
         $this->badge = $badge;
     }

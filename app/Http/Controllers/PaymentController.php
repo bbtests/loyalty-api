@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers;
 
+use App\Models\Transaction;
+use App\Services\LoyaltyService;
 use App\Services\PaymentService;
 use App\Traits\ApiResponseTrait;
 use Illuminate\Http\JsonResponse;
@@ -18,9 +20,12 @@ class PaymentController extends Controller
 
     private PaymentService $paymentService;
 
-    public function __construct(PaymentService $paymentService)
+    private LoyaltyService $loyaltyService;
+
+    public function __construct(PaymentService $paymentService, LoyaltyService $loyaltyService)
     {
         $this->paymentService = $paymentService;
+        $this->loyaltyService = $loyaltyService;
     }
 
     /**
@@ -60,7 +65,7 @@ class PaymentController extends Controller
     {
         $validator = Validator::make($request->all(), [
             'amount' => 'required|numeric|min:1',
-            'provider' => 'nullable|string|in:paystack,flutterwave',
+            'provider' => 'nullable|string|in:paystack,flutterwave,mock',
             'description' => 'nullable|string|max:255',
         ]);
 
@@ -88,20 +93,25 @@ class PaymentController extends Controller
             }
 
             $amount = $request->input('amount');
-            $provider = $request->input('provider');
+            $provider = $request->input('provider', 'mock'); // Default to mock provider
             $description = $request->input('description', 'Payment');
+
+            // Determine callback URL from request origin
+            $origin = $request->header('Origin') ?? $request->header('Referer');
+            $callbackUrl = $origin ? rtrim($origin, '/').'/payment/callback' : null;
 
             // Generate reference
             $reference = 'pay_'.time().'_'.substr(str_shuffle('0123456789abcdefghijklmnopqrstuvwxyz'), 0, 8);
 
-            $result = $this->paymentService->initializePayment($user, $amount, $reference, $provider);
+            $result = $this->paymentService->initializePayment($user, $amount, $reference, $provider, $callbackUrl);
 
             // Add missing fields that the client expects
+            $pointsPerCurrency = config('loyalty.points_per_currency', 10);
             $transactionData = array_merge($result, [
                 'id' => time(), // Temporary ID
                 'amount' => $amount,
                 'description' => $description,
-                'points_earned' => floor($amount * 10), // 10 points per dollar
+                'points_earned' => floor($amount * $pointsPerCurrency), // Points per currency unit
                 'status' => 'pending',
                 'created_at' => now()->toISOString(),
             ]);
@@ -147,7 +157,7 @@ class PaymentController extends Controller
     {
         $validator = Validator::make($request->all(), [
             'reference' => 'required|string',
-            'provider' => 'nullable|string|in:paystack,flutterwave',
+            'provider' => 'nullable|string|in:paystack,flutterwave,mock',
         ]);
 
         if ($validator->fails()) {
@@ -160,7 +170,7 @@ class PaymentController extends Controller
 
         try {
             $reference = $request->input('reference');
-            $provider = $request->input('provider');
+            $provider = $request->input('provider', 'mock'); // Default to mock provider
 
             $result = $this->paymentService->verifyPayment($reference, $provider);
 
@@ -203,7 +213,7 @@ class PaymentController extends Controller
     {
         $validator = Validator::make($request->all(), [
             'amount' => 'required|numeric|min:1',
-            'provider' => 'nullable|string|in:paystack,flutterwave',
+            'provider' => 'nullable|string|in:paystack,flutterwave,mock',
             'description' => 'nullable|string|max:255',
         ]);
 
@@ -231,7 +241,7 @@ class PaymentController extends Controller
             }
 
             $amount = $request->input('amount');
-            $provider = $request->input('provider');
+            $provider = $request->input('provider', 'mock'); // Default to mock provider
             $description = $request->input('description', 'Cashback');
 
             $result = $this->paymentService->processCashback($user, $amount, $provider);
@@ -301,12 +311,14 @@ class PaymentController extends Controller
     }
 
     /**
-     * Get public key for provider
+     * Process purchase after payment verification
      */
-    public function getPublicKey(Request $request): JsonResponse
+    public function processPurchaseAfterPayment(Request $request): JsonResponse
     {
         $validator = Validator::make($request->all(), [
-            'provider' => 'nullable|string|in:paystack,flutterwave',
+            'user_id' => 'required|integer|exists:users,id',
+            'amount' => 'required|numeric|min:1',
+            'transaction_id' => 'required|string',
         ]);
 
         if ($validator->fails()) {
@@ -318,7 +330,112 @@ class PaymentController extends Controller
         }
 
         try {
-            $provider = $request->input('provider');
+            $user = Auth::user();
+            if (! $user) {
+                return $this->errorResponse(
+                    'User not authenticated',
+                    401,
+                    [
+                        [
+                            'field' => 'authentication',
+                            'message' => 'User must be authenticated to process purchase.',
+                        ],
+                    ]
+                );
+            }
+
+            $userId = $request->input('user_id');
+            $amount = $request->input('amount');
+            $transactionId = $request->input('transaction_id');
+
+            // Verify that the authenticated user matches the user_id in the request
+            if ($user->id != $userId) {
+                return $this->errorResponse(
+                    'Unauthorized',
+                    403,
+                    [
+                        [
+                            'field' => 'user_id',
+                            'message' => 'You can only process purchases for your own account.',
+                        ],
+                    ]
+                );
+            }
+
+            // Use LoyaltyService to process the purchase
+            // This will handle transaction creation, points awarding, and dispatch ProcessPurchaseEvent job
+            $transaction = $this->loyaltyService->processPurchase($user, $amount, $transactionId);
+
+            Log::info('Purchase processed successfully with LoyaltyService', [
+                'user_id' => $user->id,
+                'transaction_id' => $transaction->id,
+                'amount' => $amount,
+                'points_earned' => $transaction->points_earned,
+                'external_transaction_id' => $transactionId,
+            ]);
+
+            return $this->successData(
+                [
+                    'item' => [
+                        'id' => $transaction->id,
+                        'amount' => (string) $amount,
+                        'points_earned' => $transaction->points_earned,
+                        'transaction_type' => 'purchase',
+                        'status' => 'completed',
+                        'created_at' => $transaction->created_at->toISOString(),
+                    ],
+                ],
+                'Purchase processed successfully.',
+                200,
+                [
+                    'transaction' => [
+                        'id' => $transaction->id,
+                        'amount' => $amount,
+                        'points_earned' => $transaction->points_earned,
+                    ],
+                ]
+            );
+
+        } catch (\Exception $e) {
+            Log::error('Purchase processing failed', [
+                'user_id' => $request->input('user_id'),
+                'amount' => $request->input('amount'),
+                'transaction_id' => $request->input('transaction_id'),
+                'error' => $e->getMessage(),
+            ]);
+
+            return $this->errorResponse(
+                'Purchase processing failed',
+                500,
+                [
+                    [
+                        'field' => 'purchase',
+                        'message' => 'Purchase processing failed due to an internal error.',
+                    ],
+                ]
+            );
+        }
+    }
+
+    /**
+     * Get public key for provider
+     */
+    public function getPublicKey(Request $request): JsonResponse
+    {
+        $validator = Validator::make($request->all(), [
+            'provider' => 'nullable|string|in:paystack,flutterwave,mock',
+        ]);
+
+        if ($validator->fails()) {
+            return $this->errorResponse(
+                'Validation failed',
+                422,
+                $validator->errors()->toArray()
+            );
+        }
+
+        try {
+            $provider = $request->input('provider', 'mock'); // Default to mock provider
             $publicKey = $this->paymentService->getPublicKey($provider);
 
             return $this->successData(

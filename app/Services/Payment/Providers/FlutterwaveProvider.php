@@ -24,7 +24,7 @@ class FlutterwaveProvider extends BasePaymentProvider
         $this->baseUrl = $config['base_url'] ?? 'https://api.flutterwave.com/v3';
     }
 
-    public function initializePayment(User $user, float $amount, string $reference): array
+    public function initializePayment(User $user, float $amount, string $reference, ?string $callbackUrl = null): array
     {
         $validationError = $this->validatePaymentData($user, $amount);
         if ($validationError) {
@@ -39,7 +39,7 @@ class FlutterwaveProvider extends BasePaymentProvider
                 'tx_ref' => $reference,
                 'amount' => $amount,
                 'currency' => 'NGN',
-                'redirect_url' => config('constants.app.frontend_url').config('constants.urls.payment_callback'),
+                'redirect_url' => $callbackUrl ?? config('constants.app.frontend_url').config('constants.urls.payment_callback'),
                 'customer' => [
                     'email' => $user->email,
                     'name' => $user->name,

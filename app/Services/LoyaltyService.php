@@ -2,20 +2,26 @@
 
 namespace App\Services;
 
-use App\Events\PurchaseProcessed;
+use App\Jobs\ProcessPurchaseEvent;
 use App\Models\LoyaltyPoint;
 use App\Models\Transaction;
 use App\Models\User;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 
 class LoyaltyService
 {
+    public function __construct()
+    {
+        // No dependencies needed for job-based approach
+    }
+
     public function processPurchase(User $user, float $amount, ?string $externalTransactionId = null): Transaction
     {
         return DB::transaction(function () use ($user, $amount, $externalTransactionId) {
             // Calculate loyalty points (configurable rate)
-            $pointsPerDollar = config('loyalty.points_per_dollar', 10);
-            $pointsEarned = (int) floor($amount * $pointsPerDollar);
+            $pointsPerCurrency = config('loyalty.points_per_currency', 10);
+            $pointsEarned = (int) floor($amount * $pointsPerCurrency);
 
             // Create transaction record
             $transaction = Transaction::create([
@@ -26,28 +32,32 @@ class LoyaltyService
                 'external_transaction_id' => $externalTransactionId,
                 'status' => 'completed',
                 'metadata' => [
-                    'points_rate' => $pointsPerDollar,
+                    'points_rate' => $pointsPerCurrency,
                     'processed_at' => now(),
                 ],
             ]);
 
             // Update or create loyalty points record
-            $loyaltyPoints = $user->loyaltyPoints;
-
-            if (! $loyaltyPoints) {
-                $loyaltyPoints = new LoyaltyPoint([
-                    'user_id' => $user->id,
+            $loyaltyPoints = LoyaltyPoint::firstOrCreate(
+                ['user_id' => $user->id],
+                [
                     'points' => 0,
                     'total_earned' => 0,
                     'total_redeemed' => 0,
-                ]);
-                $loyaltyPoints->save();
-            }
+                ]
+            );
 
             $loyaltyPoints->addPoints($pointsEarned);
 
-            // Dispatch event for achievement/badge checking
-            event(new PurchaseProcessed($user, $transaction));
+            // Dispatch job for achievement/badge processing
+            // This will use the configured queue connection (Redis or RabbitMQ)
+            ProcessPurchaseEvent::dispatch($user->id, $transaction->id);
+
+            Log::info('Purchase event job dispatched', [
+                'user_id' => $user->id,
+                'transaction_id' => $transaction->id,
+                'queue_connection' => config('queue.default'),
+            ]);
 
             return $transaction;
         });

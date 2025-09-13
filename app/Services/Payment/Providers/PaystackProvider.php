@@ -24,7 +24,7 @@ class PaystackProvider extends BasePaymentProvider
         $this->baseUrl = $config['base_url'] ?? 'https://api.paystack.co';
     }
 
-    public function initializePayment(User $user, float $amount, string $reference): array
+    public function initializePayment(User $user, float $amount, string $reference, ?string $callbackUrl = null): array
     {
         $validationError = $this->validatePaymentData($user, $amount);
         if ($validationError) {
@@ -39,7 +39,7 @@ class PaystackProvider extends BasePaymentProvider
                 'amount' => $amount * 100, // Convert to kobo
                 'email' => $user->email,
                 'reference' => $reference,
-                'callback_url' => config('constants.app.frontend_url').config('constants.urls.payment_callback'),
+                'callback_url' => $callbackUrl ?? config('constants.app.frontend_url').config('constants.urls.payment_callback'),
                 'metadata' => [
                     'user_id' => $user->id,
                     'loyalty_program' => true,

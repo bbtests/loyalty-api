@@ -29,8 +29,8 @@ class ProcessCashbackRequest extends FormRequest
     {
         return [
             'amount.required' => 'Cashback amount is required',
-            'amount.min' => 'Minimum cashback amount is $0.01',
-            'amount.max' => 'Maximum cashback amount is $10,000',
+            'amount.min' => 'Minimum cashback amount is ₦0.01',
+            'amount.max' => 'Maximum cashback amount is ₦10,000,000',
             'transaction_id.exists' => 'Transaction not found',
         ];
     }

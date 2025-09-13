@@ -6,8 +6,11 @@ namespace App\Http\Controllers;
 
 use App\Http\Requests\User\StoreUserRequest;
 use App\Http\Requests\User\UpdateUserRequest;
+use App\Http\Resources\AdminUserResource;
+use App\Http\Resources\LoyaltyDataResource;
 use App\Http\Resources\User\UserResource;
 use App\Models\User;
+use App\Services\LoyaltyService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -20,6 +23,13 @@ use Spatie\Permission\Models\Role;
  */
 class UserController extends Controller
 {
+    private LoyaltyService $loyaltyService;
+
+    public function __construct(LoyaltyService $loyaltyService)
+    {
+        $this->loyaltyService = $loyaltyService;
+    }
+
     public function index(Request $request): JsonResponse
     {
         try {
@@ -144,5 +154,54 @@ class UserController extends Controller
         $user->delete();
 
         return $this->successMessage('User deleted successfully.');
+    }
+
+    /**
+     * Get all users' achievements and badge progress (Admin only)
+     * GET /api/admin/users/achievements
+     */
+    public function getAllUsersAchievements(): JsonResponse
+    {
+        try {
+            $users = User::with([
+                'loyaltyPoints',
+                'achievements',
+                'badges' => function ($query) {
+                    $query->orderBy('tier', 'desc');
+                },
+            ])->paginate(20);
+
+            return $this->successCollection(
+                $users,
+                AdminUserResource::class,
+                'Users achievements retrieved successfully.'
+            );
+
+        } catch (\Exception $e) {
+            return $this->errorResponse('Failed to retrieve users data', 500, [
+                $e->getMessage(),
+            ]);
+        }
+    }
+
+    /**
+     * Get specific user's loyalty data (Admin only)
+     * GET /api/admin/users/{user}/loyalty-data
+     */
+    public function getUserLoyaltyData(User $user): JsonResponse
+    {
+        try {
+            $loyaltyData = $this->loyaltyService->getUserLoyaltyData($user);
+
+            return $this->successItem(
+                new LoyaltyDataResource($loyaltyData),
+                'User loyalty data retrieved successfully.'
+            );
+
+        } catch (\Exception $e) {
+            return $this->errorResponse('Failed to retrieve user loyalty data', 500, [
+                $e->getMessage(),
+            ]);
+        }
     }
 }

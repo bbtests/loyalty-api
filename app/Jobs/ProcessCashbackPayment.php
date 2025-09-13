@@ -31,6 +31,10 @@ class ProcessCashbackPayment implements ShouldQueue
         $this->user = $user;
         $this->amount = $amount;
         $this->transactionId = $transactionId;
+
+        // Set queue connection and name based on environment
+        $this->onConnection(config('queue.default', 'redis'));
+        $this->onQueue('default');
     }
 
     public function handle(PaymentService $paymentService): void
@@ -74,6 +78,7 @@ class ProcessCashbackPayment implements ShouldQueue
             'user_id' => $this->user->id,
             'amount' => $this->amount,
             'error' => $exception->getMessage(),
+            'queue_connection' => config('queue.default', 'redis'),
         ]);
     }
 }

@@ -33,8 +33,8 @@ class ProcessTransactionRequest extends FormRequest
             'user_id.required' => 'User ID is required',
             'user_id.exists' => 'User not found',
             'amount.required' => 'Transaction amount is required',
-            'amount.min' => 'Transaction amount must be at least $0.01',
-            'amount.max' => 'Transaction amount cannot exceed $999,999.99',
+            'amount.min' => 'Transaction amount must be at least ₦0.01',
+            'amount.max' => 'Transaction amount cannot exceed ₦999,999.99',
         ];
     }
 }

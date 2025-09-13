@@ -7,10 +7,26 @@ use App\Services\AchievementService;
 use App\Services\BadgeService;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Queue\InteractsWithQueue;
+use Illuminate\Queue\SerializesModels;
 
 class ProcessLoyaltyRewards implements ShouldQueue
 {
-    use InteractsWithQueue;
+    use InteractsWithQueue, SerializesModels;
+
+    /**
+     * The number of times the job may be attempted.
+     */
+    public int $tries = 3;
+
+    /**
+     * The number of seconds to wait before retrying the job.
+     */
+    public int $backoff = 30;
+
+    /**
+     * The maximum number of seconds the job can run.
+     */
+    public int $timeout = 120;
 
     private AchievementService $achievementService;
 
@@ -40,6 +56,7 @@ class ProcessLoyaltyRewards implements ShouldQueue
             'user_id' => $event->user->id,
             'transaction_id' => $event->transaction->id,
             'error' => $exception->getMessage(),
+            'queue_connection' => config('queue.default', 'redis'),
         ]);
     }
 }

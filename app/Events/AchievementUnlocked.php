@@ -4,22 +4,17 @@ namespace App\Events;
 
 use App\Models\Achievement;
 use App\Models\User;
-use Illuminate\Broadcasting\InteractsWithSockets;
 use Illuminate\Broadcasting\PrivateChannel;
-use Illuminate\Contracts\Broadcasting\ShouldBroadcast;
-use Illuminate\Foundation\Events\Dispatchable;
-use Illuminate\Queue\SerializesModels;
 
-class AchievementUnlocked implements ShouldBroadcast
+class AchievementUnlocked extends BaseBroadcastEvent
 {
-    use Dispatchable, InteractsWithSockets, SerializesModels;
-
     public User $user;
 
     public Achievement $achievement;
 
     public function __construct(User $user, Achievement $achievement)
     {
+        parent::__construct();
         $this->user = $user;
         $this->achievement = $achievement;
     }

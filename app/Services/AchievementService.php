@@ -31,36 +31,99 @@ class AchievementService
         return $unlockedAchievements;
     }
 
+    /**
+     * Calculate achievement progress for a user
+     */
+    public function calculateAchievementProgress(User $user, Achievement $achievement): int
+    {
+        $criteria = $achievement->criteria;
+
+        if (isset($criteria['transaction_count'])) {
+            $currentCount = $user->transactions()->where('transaction_type', 'purchase')->count();
+            $requiredCount = $criteria['transaction_count'];
+
+            return min(100, (int) round(($currentCount / $requiredCount) * 100));
+        }
+
+        if (isset($criteria['points_minimum'])) {
+            $currentPoints = $user->total_points;
+            $requiredPoints = $criteria['points_minimum'];
+
+            return min(100, (int) round(($currentPoints / $requiredPoints) * 100));
+        }
+
+        if (isset($criteria['single_transaction_amount'])) {
+            $maxAmount = $user->transactions()
+                ->where('transaction_type', 'purchase')
+                ->max('amount') ?? 0;
+            $requiredAmount = $criteria['single_transaction_amount'];
+
+            return min(100, (int) round(($maxAmount / $requiredAmount) * 100));
+        }
+
+        return 0;
+    }
+
     private function checkAchievementCriteria(User $user, Achievement $achievement): bool
     {
-        switch ($achievement->name) {
-            case 'First Purchase':
-                return $user->transactions()->where('transaction_type', 'purchase')->exists();
+        $criteria = $achievement->criteria;
 
-            case 'Loyal Customer':
-            case 'Point Master':
-                return $user->total_points >= $achievement->points_required;
-
-            case 'Big Spender':
-                return $user->transactions()
-                    ->where('transaction_type', 'purchase')
-                    ->where('amount', '>=', 500)
-                    ->exists();
-
-            case 'Frequent Buyer':
-                return $user->transactions()
-                    ->where('transaction_type', 'purchase')
-                    ->count() >= 10;
-
-            default:
-                // Custom achievement logic can be added here
-                return false;
+        // Skip if criteria is null or empty
+        if ($criteria === null || empty($criteria)) {
+            return false;
         }
+
+        // Handle multiple criteria - all must be met
+        foreach ($criteria as $criterion => $value) {
+            switch ($criterion) {
+                case 'transaction_count':
+                    $count = $user->transactions()->where('transaction_type', 'purchase')->count();
+                    if ($count < $value) {
+                        return false;
+                    }
+                    break;
+
+                case 'points_minimum':
+                    if ($user->total_points < $value) {
+                        return false;
+                    }
+                    break;
+
+                case 'single_transaction_amount':
+                    $maxAmount = $user->transactions()
+                        ->where('transaction_type', 'purchase')
+                        ->max('amount') ?? 0;
+                    if ($maxAmount < $value) {
+                        return false;
+                    }
+                    break;
+
+                case 'total_spending':
+                    $totalSpending = $user->transactions()
+                        ->where('transaction_type', 'purchase')
+                        ->sum('amount');
+                    if ($totalSpending < $value) {
+                        return false;
+                    }
+                    break;
+
+                default:
+                    // Unknown criterion
+                    return false;
+            }
+        }
+
+        return true;
     }
 
     private function unlockAchievement(User $user, Achievement $achievement): void
     {
         DB::transaction(function () use ($user, $achievement) {
+            // Check if achievement is already unlocked
+            if ($user->achievements()->where('achievement_id', $achievement->id)->exists()) {
+                return; // Already unlocked, skip
+            }
+
             $user->achievements()->attach($achievement->id, [
                 'unlocked_at' => now(),
             ]);

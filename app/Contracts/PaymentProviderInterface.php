@@ -11,7 +11,7 @@ interface PaymentProviderInterface
      *
      * @return array<string, mixed>
      */
-    public function initializePayment(User $user, float $amount, string $reference): array;
+    public function initializePayment(User $user, float $amount, string $reference, ?string $callbackUrl = null): array;
 
     /**
      * Verify a payment transaction

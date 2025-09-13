@@ -25,7 +25,7 @@ abstract class BasePaymentProvider implements PaymentProviderInterface
     /**
      * @return array<string, mixed>
      */
-    abstract public function initializePayment(User $user, float $amount, string $reference): array;
+    abstract public function initializePayment(User $user, float $amount, string $reference, ?string $callbackUrl = null): array;
 
     /**
      * @return array<string, mixed>

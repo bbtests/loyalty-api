@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Resources\Achievement\AchievementResource;
 use App\Models\Achievement;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -13,16 +14,19 @@ class AchievementController extends Controller
      */
     public function index(): JsonResponse
     {
-        $achievements = Achievement::with('users')->get();
+        try {
+            $achievements = Achievement::with('users')->get();
 
-        return response()->json([
-            'status' => 'success',
-            'code' => 200,
-            'message' => 'Achievements retrieved successfully',
-            'data' => [
-                'items' => $achievements,
-            ],
-        ]);
+            return $this->successItems(
+                $achievements,
+                AchievementResource::class,
+                'Achievements retrieved successfully.'
+            );
+        } catch (\Exception $e) {
+            return $this->errorResponse('Failed to retrieve achievements', 500, [
+                $e->getMessage(),
+            ]);
+        }
     }
 
     /**
@@ -30,24 +34,29 @@ class AchievementController extends Controller
      */
     public function store(Request $request): JsonResponse
     {
-        $validated = $request->validate([
-            'name' => 'required|string|max:255',
-            'description' => 'required|string',
-            'points_required' => 'required|integer|min:0',
-            'badge_icon' => 'required|string|max:255',
-            'is_active' => 'boolean',
-        ]);
+        try {
+            $validated = $request->validate([
+                'name' => 'required|string|max:255',
+                'description' => 'required|string',
+                'points_required' => 'required|integer|min:0',
+                'badge_icon' => 'required|string|max:255',
+                'is_active' => 'boolean',
+            ]);
 
-        $achievement = Achievement::create($validated);
+            $achievement = Achievement::create($validated);
 
-        return response()->json([
-            'status' => 'success',
-            'code' => 201,
-            'message' => 'Achievement created successfully',
-            'data' => [
-                'item' => $achievement,
-            ],
-        ], 201);
+            return $this->successItem(
+                new AchievementResource($achievement),
+                'Achievement created successfully.',
+                201
+            );
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            return $this->errorResponse('Validation failed', 422, $e->errors());
+        } catch (\Exception $e) {
+            return $this->errorResponse('Failed to create achievement', 500, [
+                $e->getMessage(),
+            ]);
+        }
     }
 
     /**
@@ -55,16 +64,18 @@ class AchievementController extends Controller
      */
     public function show(Achievement $achievement): JsonResponse
     {
-        $achievement->load('users');
+        try {
+            $achievement->load('users');
 
-        return response()->json([
-            'status' => 'success',
-            'code' => 200,
-            'message' => 'Achievement retrieved successfully',
-            'data' => [
-                'item' => $achievement,
-            ],
-        ]);
+            return $this->successItem(
+                new AchievementResource($achievement),
+                'Achievement retrieved successfully.'
+            );
+        } catch (\Exception $e) {
+            return $this->errorResponse('Failed to retrieve achievement', 500, [
+                $e->getMessage(),
+            ]);
+        }
     }
 
     /**
@@ -72,24 +83,28 @@ class AchievementController extends Controller
      */
     public function update(Request $request, Achievement $achievement): JsonResponse
     {
-        $validated = $request->validate([
-            'name' => 'sometimes|string|max:255',
-            'description' => 'sometimes|string',
-            'points_required' => 'sometimes|integer|min:0',
-            'badge_icon' => 'sometimes|string|max:255',
-            'is_active' => 'sometimes|boolean',
-        ]);
+        try {
+            $validated = $request->validate([
+                'name' => 'sometimes|string|max:255',
+                'description' => 'sometimes|string',
+                'points_required' => 'sometimes|integer|min:0',
+                'badge_icon' => 'sometimes|string|max:255',
+                'is_active' => 'sometimes|boolean',
+            ]);
 
-        $achievement->update($validated);
+            $achievement->update($validated);
 
-        return response()->json([
-            'status' => 'success',
-            'code' => 200,
-            'message' => 'Achievement updated successfully',
-            'data' => [
-                'item' => $achievement,
-            ],
-        ]);
+            return $this->successItem(
+                new AchievementResource($achievement),
+                'Achievement updated successfully.'
+            );
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            return $this->errorResponse('Validation failed', 422, $e->errors());
+        } catch (\Exception $e) {
+            return $this->errorResponse('Failed to update achievement', 500, [
+                $e->getMessage(),
+            ]);
+        }
     }
 
     /**
@@ -97,13 +112,14 @@ class AchievementController extends Controller
      */
     public function destroy(Achievement $achievement): JsonResponse
     {
-        $achievement->delete();
+        try {
+            $achievement->delete();
 
-        return response()->json([
-            'status' => 'success',
-            'code' => 200,
-            'message' => 'Achievement deleted successfully',
-            'data' => [],
-        ]);
+            return $this->successMessage('Achievement deleted successfully.');
+        } catch (\Exception $e) {
+            return $this->errorResponse('Failed to delete achievement', 500, [
+                $e->getMessage(),
+            ]);
+        }
     }
 }

@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Http\Controllers;
 
 use App\Http\Requests\Transaction\ProcessTransactionRequest;
@@ -24,18 +26,58 @@ class TransactionController extends Controller
     /**
      * Display a listing of the resource.
      */
-    public function index(): JsonResponse
+    public function index(Request $request): JsonResponse
     {
-        $transactions = Transaction::with(['user', 'cashbackPayment'])->get();
+        try {
+            $pagination = $this::applyPagination($request);
 
-        return response()->json([
-            'status' => 'success',
-            'code' => 200,
-            'message' => 'Transactions retrieved successfully',
-            'data' => [
-                'items' => $transactions,
-            ],
-        ]);
+            $transactions = Transaction::with(['user', 'cashbackPayment'])
+                ->orderBy($pagination['sort_by'], $pagination['sort_order'])
+                ->paginate($pagination['per_page']);
+
+            return $this->successCollection(
+                $transactions,
+                TransactionResource::class,
+                'Transactions retrieved successfully.',
+                $this->buildFilters([
+                    'search_query' => $request->input('search'),
+                ])
+            );
+        } catch (\Exception $e) {
+            return $this->errorResponse('Failed to retrieve transactions', 422, [
+                $e->getMessage(),
+            ]);
+        }
+    }
+
+    /**
+     * Get transactions for a specific user
+     * GET /api/users/{user}/transactions
+     */
+    public function getUserTransactions(Request $request, User $user): JsonResponse
+    {
+        try {
+            $pagination = $this::applyPagination($request);
+
+            $transactions = Transaction::where('user_id', $user->id)
+                ->with(['cashbackPayment'])
+                ->orderBy($pagination['sort_by'], $pagination['sort_order'])
+                ->paginate($pagination['per_page']);
+
+            return $this->successCollection(
+                $transactions,
+                TransactionResource::class,
+                'User transactions retrieved successfully.',
+                $this->buildFilters([
+                    'user_id' => $user->id,
+                    'search_query' => $request->input('search'),
+                ])
+            );
+        } catch (\Exception $e) {
+            return $this->errorResponse('Failed to retrieve user transactions', 422, [
+                $e->getMessage(),
+            ]);
+        }
     }
 
     /**
@@ -55,11 +97,12 @@ class TransactionController extends Controller
                 $validated['external_transaction_id'] ?? null
             );
 
-            return response()->json([
-                'success' => true,
-                'message' => 'Transaction processed successfully',
-                'data' => new TransactionResource($transaction),
-            ], 201);
+            return $this->successItem(
+                new TransactionResource($transaction),
+                'Transaction processed successfully.',
+                201,
+                []
+            );
 
         } catch (\Exception $e) {
             Log::error('Transaction processing failed', [
@@ -67,71 +110,93 @@ class TransactionController extends Controller
                 'error' => $e->getMessage(),
             ]);
 
-            return response()->json([
-                'success' => false,
-                'message' => 'Failed to process transaction',
-                'error' => $e->getMessage(),
-            ], 500);
+            return $this->errorResponse('Failed to process transaction', 422, [
+                $e->getMessage(),
+            ]);
         }
     }
 
     /**
      * Display the specified resource.
      */
-    public function show(Transaction $transaction): JsonResponse
+    public function show(string $id): JsonResponse
     {
-        $transaction->load(['user', 'cashbackPayment']);
+        try {
+            $transaction = Transaction::with(['user', 'cashbackPayment'])->find($id);
 
-        return response()->json([
-            'status' => 'success',
-            'code' => 200,
-            'message' => 'Transaction retrieved successfully',
-            'data' => [
-                'item' => $transaction,
-            ],
-        ]);
+            if (! $transaction) {
+                return $this->notFoundError('Transaction', $id);
+            }
+
+            return $this->successItem(
+                new TransactionResource($transaction),
+                'Transaction retrieved successfully.'
+            );
+
+        } catch (\Exception $e) {
+            return $this->errorResponse('Failed to retrieve transaction', 422, [
+                $e->getMessage(),
+            ]);
+        }
     }
 
     /**
      * Update the specified resource in storage.
      */
-    public function update(Request $request, Transaction $transaction): JsonResponse
+    public function update(Request $request, string $id): JsonResponse
     {
-        $validated = $request->validate([
-            'user_id' => 'sometimes|exists:users,id',
-            'amount' => 'sometimes|numeric|min:0',
-            'points_earned' => 'sometimes|integer|min:0',
-            'transaction_type' => 'sometimes|string|max:255',
-            'external_transaction_id' => 'sometimes|string|max:255',
-            'status' => 'sometimes|string|max:255',
-            'metadata' => 'sometimes|array',
-        ]);
+        try {
+            $transaction = Transaction::find($id);
 
-        $transaction->update($validated);
+            if (! $transaction) {
+                return $this->notFoundError('Transaction', $id);
+            }
 
-        return response()->json([
-            'status' => 'success',
-            'code' => 200,
-            'message' => 'Transaction updated successfully',
-            'data' => [
-                'item' => $transaction,
-            ],
-        ]);
+            $validated = $request->validate([
+                'user_id' => 'sometimes|exists:users,id',
+                'amount' => 'sometimes|numeric|min:0',
+                'points_earned' => 'sometimes|integer|min:0',
+                'transaction_type' => 'sometimes|string|max:255',
+                'external_transaction_id' => 'sometimes|string|max:255',
+                'status' => 'sometimes|string|max:255',
+                'metadata' => 'sometimes|array',
+            ]);
+
+            $transaction->update($validated);
+
+            return $this->successItem(
+                new TransactionResource($transaction),
+                'Transaction updated successfully.'
+            );
+
+        } catch (\Exception $e) {
+            return $this->errorResponse('Failed to update transaction', 422, [
+                $e->getMessage(),
+            ]);
+        }
     }
 
     /**
      * Remove the specified resource from storage.
      */
-    public function destroy(Transaction $transaction): JsonResponse
+    public function destroy(string $id): JsonResponse
     {
-        $transaction->delete();
+        try {
+            $transaction = Transaction::find($id);
 
-        return response()->json([
-            'status' => 'success',
-            'code' => 200,
-            'message' => 'Transaction deleted successfully',
-            'data' => [],
-        ]);
+            if (! $transaction) {
+                return $this->notFoundError('Transaction', $id);
+            }
+
+            $transaction->delete();
+
+            return $this->successMessage('Transaction deleted successfully.');
+
+        } catch (\Exception $e) {
+            return $this->errorResponse('Failed to delete transaction', 422, [
+                $e->getMessage(),
+            ]);
+        }
     }
 
     /**
@@ -160,7 +225,7 @@ class TransactionController extends Controller
                     Log::info('Unhandled webhook event', ['payload' => $payload]);
             }
 
-            return response()->json(['success' => true]);
+            return $this->successMessage('Webhook processed successfully.');
 
         } catch (\Exception $e) {
             Log::error('Webhook processing failed', [
@@ -168,10 +233,12 @@ class TransactionController extends Controller
                 'error' => $e->getMessage(),
             ]);
 
-            return response()->json([
-                'success' => false,
-                'error' => 'Webhook processing failed',
-            ], 500);
+            return $this->errorResponse('Webhook processing failed', 500, [
+                [
+                    'field' => 'webhook',
+                    'message' => 'Webhook processing failed due to an internal error.',
+                ],
+            ]);
         }
     }
 
