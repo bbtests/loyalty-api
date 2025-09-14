@@ -66,7 +66,7 @@ class PaymentServiceTest extends TestCase
 
         $this->assertArrayHasKey('paystack', $providers);
         $this->assertArrayHasKey('flutterwave', $providers);
-        $this->assertCount(2, $providers);
+        $this->assertCount(3, $providers); // Now includes mock provider
     }
 
     public function test_is_provider_available(): void
@@ -93,7 +93,7 @@ class PaymentServiceTest extends TestCase
 
         $this->assertArrayHasKey('paystack', $allInfo);
         $this->assertArrayHasKey('flutterwave', $allInfo);
-        $this->assertCount(2, $allInfo);
+        $this->assertCount(3, $allInfo); // Now includes mock provider
     }
 
     public function test_get_configuration(): void

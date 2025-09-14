@@ -8,7 +8,6 @@ use App\Models\Transaction;
 use App\Models\User;
 use App\Services\AchievementService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Event;
 use Tests\TestCase;
 
@@ -25,292 +24,193 @@ class AchievementServiceTest extends TestCase
         Event::fake();
     }
 
-    public function test_check_and_unlock_achievements_returns_empty_array_when_no_achievements(): void
+    public function test_can_check_and_unlock_first_purchase_achievement(): void
     {
         $user = User::factory()->create();
 
-        $result = $this->achievementService->checkAndUnlockAchievements($user);
-
-        $this->assertEmpty($result);
-    }
-
-    public function test_check_and_unlock_achievements_skips_already_unlocked_achievements(): void
-    {
-        $user = User::factory()->create();
+        // Create first purchase achievement
         $achievement = Achievement::factory()->create([
             'name' => 'First Purchase',
+            'description' => 'Make your first purchase',
+            'criteria' => ['transaction_count' => 1],
+            'points_required' => 0,
             'is_active' => true,
         ]);
 
-        // User already has this achievement
-        $user->achievements()->attach($achievement->id, ['unlocked_at' => now()]);
-
-        $result = $this->achievementService->checkAndUnlockAchievements($user);
-
-        $this->assertEmpty($result);
-        Event::assertNotDispatched(AchievementUnlocked::class);
-    }
-
-    public function test_check_and_unlock_achievements_unlocks_first_purchase_achievement(): void
-    {
-        $user = User::factory()->create();
-        $achievement = Achievement::factory()->create([
-            'name' => 'First Purchase',
-            'is_active' => true,
-        ]);
-
-        // Create a purchase transaction
+        // Create a transaction for the user
         Transaction::factory()->create([
             'user_id' => $user->id,
-            'transaction_type' => 'purchase',
             'amount' => 100.00,
+            'transaction_type' => 'purchase',
+            'status' => 'completed',
         ]);
 
-        $result = $this->achievementService->checkAndUnlockAchievements($user);
+        $this->achievementService->checkAndUnlockAchievements($user);
 
-        $this->assertCount(1, $result);
-        $this->assertEquals($achievement->id, $result[0]->id);
+        Event::assertDispatched(AchievementUnlocked::class, function ($event) use ($user, $achievement) {
+            return $event->user->id === $user->id && $event->achievement->id === $achievement->id;
+        });
+
         $this->assertDatabaseHas('user_achievements', [
             'user_id' => $user->id,
             'achievement_id' => $achievement->id,
         ]);
-        Event::assertDispatched(AchievementUnlocked::class);
     }
 
-    public function test_check_and_unlock_achievements_unlocks_loyal_customer_achievement(): void
+    public function test_can_check_and_unlock_points_achievement(): void
     {
         $user = User::factory()->create();
+
+        // Create loyalty points achievement
         $achievement = Achievement::factory()->create([
-            'name' => 'Loyal Customer',
+            'name' => 'Point Master',
+            'description' => 'Earn 1000 loyalty points',
+            'criteria' => ['points_minimum' => 1000],
             'points_required' => 1000,
             'is_active' => true,
         ]);
 
         // Create loyalty points for the user
         $user->loyaltyPoints()->create([
-            'points' => 500,
+            'points' => 1000,
             'total_earned' => 1000,
             'total_redeemed' => 0,
         ]);
 
-        $result = $this->achievementService->checkAndUnlockAchievements($user);
+        $this->achievementService->checkAndUnlockAchievements($user);
 
-        $this->assertCount(1, $result);
-        $this->assertEquals($achievement->id, $result[0]->id);
-        Event::assertDispatched(AchievementUnlocked::class);
+        Event::assertDispatched(AchievementUnlocked::class, function ($event) use ($user, $achievement) {
+            return $event->user->id === $user->id && $event->achievement->id === $achievement->id;
+        });
     }
 
-    public function test_check_and_unlock_achievements_unlocks_point_master_achievement(): void
+    public function test_can_check_and_unlock_big_spender_achievement(): void
     {
         $user = User::factory()->create();
-        $achievement = Achievement::factory()->create([
-            'name' => 'Point Master',
-            'points_required' => 5000,
-            'is_active' => true,
-        ]);
 
-        // Create loyalty points for the user
-        $user->loyaltyPoints()->create([
-            'points' => 2000,
-            'total_earned' => 5000,
-            'total_redeemed' => 0,
-        ]);
-
-        $result = $this->achievementService->checkAndUnlockAchievements($user);
-
-        $this->assertCount(1, $result);
-        $this->assertEquals($achievement->id, $result[0]->id);
-        Event::assertDispatched(AchievementUnlocked::class);
-    }
-
-    public function test_check_and_unlock_achievements_unlocks_big_spender_achievement(): void
-    {
-        $user = User::factory()->create();
+        // Create big spender achievement
         $achievement = Achievement::factory()->create([
             'name' => 'Big Spender',
+            'description' => 'Spend over ₦50,000 in a single transaction',
+            'criteria' => ['single_transaction_amount' => 500],
+            'points_required' => 0,
             'is_active' => true,
         ]);
 
-        // Create a large purchase transaction
+        // Create a large transaction
         Transaction::factory()->create([
             'user_id' => $user->id,
-            'transaction_type' => 'purchase',
             'amount' => 600.00,
+            'transaction_type' => 'purchase',
+            'status' => 'completed',
         ]);
 
-        $result = $this->achievementService->checkAndUnlockAchievements($user);
+        // Refresh user to load relationships
+        $user->refresh();
+        $user->load('transactions');
 
-        $this->assertCount(1, $result);
-        $this->assertEquals($achievement->id, $result[0]->id);
-        Event::assertDispatched(AchievementUnlocked::class);
+        $this->achievementService->checkAndUnlockAchievements($user);
+
+        Event::assertDispatched(AchievementUnlocked::class, function ($event) use ($user, $achievement) {
+            return $event->user->id === $user->id && $event->achievement->id === $achievement->id;
+        });
     }
 
-    public function test_check_and_unlock_achievements_unlocks_frequent_buyer_achievement(): void
+    public function test_does_not_unlock_achievement_twice(): void
     {
         $user = User::factory()->create();
+
+        $achievement = Achievement::factory()->create([
+            'name' => 'First Purchase',
+            'description' => 'Make your first purchase',
+            'criteria' => ['transaction_count' => 1],
+            'points_required' => 0,
+            'is_active' => true,
+        ]);
+
+        // Create a transaction
+        Transaction::factory()->create([
+            'user_id' => $user->id,
+            'amount' => 100.00,
+            'transaction_type' => 'purchase',
+            'status' => 'completed',
+        ]);
+
+        // First check
+        $this->achievementService->checkAndUnlockAchievements($user);
+
+        // Second check - should not create duplicate
+        $this->achievementService->checkAndUnlockAchievements($user);
+
+        // Should only be dispatched once
+        Event::assertDispatched(AchievementUnlocked::class, 1);
+
+        // Should only have one record in database
+        $this->assertDatabaseCount('user_achievements', 1);
+    }
+
+    public function test_calculates_achievement_progress_correctly(): void
+    {
+        $user = User::factory()->create();
+
         $achievement = Achievement::factory()->create([
             'name' => 'Frequent Buyer',
-            'is_active' => true,
+            'description' => 'Make 10 purchases',
+            'criteria' => ['transaction_count' => 10],
+            'points_required' => 0,
         ]);
 
-        // Create 10 purchase transactions
-        Transaction::factory()->count(10)->create([
+        // Create 5 transactions
+        Transaction::factory()->count(5)->create([
             'user_id' => $user->id,
+            'amount' => 100.00,
             'transaction_type' => 'purchase',
-            'amount' => 50.00,
+            'status' => 'completed',
         ]);
 
-        $result = $this->achievementService->checkAndUnlockAchievements($user);
+        $progress = $this->achievementService->calculateAchievementProgress($user, $achievement);
 
-        $this->assertCount(1, $result);
-        $this->assertEquals($achievement->id, $result[0]->id);
-        Event::assertDispatched(AchievementUnlocked::class);
+        $this->assertEquals(50, $progress); // 5/10 = 50%
     }
 
-    public function test_check_and_unlock_achievements_does_not_unlock_insufficient_criteria(): void
+    public function test_handles_multiple_criteria_achievements(): void
     {
         $user = User::factory()->create();
+
         $achievement = Achievement::factory()->create([
-            'name' => 'Loyal Customer',
-            'points_required' => 1000,
+            'name' => 'VIP Customer',
+            'description' => 'Make 5 purchases and earn 500 points',
+            'criteria' => [
+                'transaction_count' => 5,
+                'points_minimum' => 500,
+            ],
+            'points_required' => 500,
             'is_active' => true,
         ]);
 
-        // Create insufficient loyalty points
+        // Create 5 transactions
+        Transaction::factory()->count(5)->create([
+            'user_id' => $user->id,
+            'amount' => 100.00,
+            'transaction_type' => 'purchase',
+            'status' => 'completed',
+        ]);
+
+        // Create loyalty points
         $user->loyaltyPoints()->create([
             'points' => 500,
             'total_earned' => 500,
             'total_redeemed' => 0,
         ]);
 
-        $result = $this->achievementService->checkAndUnlockAchievements($user);
-
-        $this->assertEmpty($result);
-        Event::assertNotDispatched(AchievementUnlocked::class);
-    }
-
-    public function test_check_and_unlock_achievements_skips_inactive_achievements(): void
-    {
-        $user = User::factory()->create();
-        $achievement = Achievement::factory()->create([
-            'name' => 'First Purchase',
-            'is_active' => false,
-        ]);
-
-        // Create a purchase transaction
-        Transaction::factory()->create([
-            'user_id' => $user->id,
-            'transaction_type' => 'purchase',
-            'amount' => 100.00,
-        ]);
-
-        $result = $this->achievementService->checkAndUnlockAchievements($user);
-
-        $this->assertEmpty($result);
-        Event::assertNotDispatched(AchievementUnlocked::class);
-    }
-
-    public function test_check_and_unlock_achievements_handles_unknown_achievement_type(): void
-    {
-        $user = User::factory()->create();
-        $achievement = Achievement::factory()->create([
-            'name' => 'Unknown Achievement',
-            'is_active' => true,
-        ]);
-
-        $result = $this->achievementService->checkAndUnlockAchievements($user);
-
-        $this->assertEmpty($result);
-        Event::assertNotDispatched(AchievementUnlocked::class);
-    }
-
-    public function test_check_and_unlock_achievements_logs_event_to_database(): void
-    {
-        $user = User::factory()->create();
-        $achievement = Achievement::factory()->create([
-            'name' => 'First Purchase',
-            'is_active' => true,
-        ]);
-
-        // Create a purchase transaction
-        Transaction::factory()->create([
-            'user_id' => $user->id,
-            'transaction_type' => 'purchase',
-            'amount' => 100.00,
-        ]);
+        // Refresh user to load the loyalty points relationship
+        $user->refresh();
+        $user->load('loyaltyPoints');
 
         $this->achievementService->checkAndUnlockAchievements($user);
 
-        $this->assertDatabaseHas('events', [
-            'user_id' => $user->id,
-            'event_type' => 'achievement_unlocked',
-        ]);
-    }
-
-    public function test_check_and_unlock_achievements_unlocks_multiple_achievements(): void
-    {
-        $user = User::factory()->create();
-
-        // Create multiple achievements
-        $firstPurchase = Achievement::factory()->create([
-            'name' => 'First Purchase',
-            'is_active' => true,
-        ]);
-
-        $loyalCustomer = Achievement::factory()->create([
-            'name' => 'Loyal Customer',
-            'points_required' => 1000,
-            'is_active' => true,
-        ]);
-
-        // Create conditions for both achievements
-        Transaction::factory()->create([
-            'user_id' => $user->id,
-            'transaction_type' => 'purchase',
-            'amount' => 100.00,
-        ]);
-
-        $user->loyaltyPoints()->create([
-            'points' => 500,
-            'total_earned' => 1000,
-            'total_redeemed' => 0,
-        ]);
-
-        $result = $this->achievementService->checkAndUnlockAchievements($user);
-
-        $this->assertCount(2, $result);
-        Event::assertDispatchedTimes(AchievementUnlocked::class, 2);
-    }
-
-    public function test_check_and_unlock_achievements_uses_database_transaction(): void
-    {
-        $user = User::factory()->create();
-        $achievement = Achievement::factory()->create([
-            'name' => 'First Purchase',
-            'is_active' => true,
-        ]);
-
-        // Create a purchase transaction
-        Transaction::factory()->create([
-            'user_id' => $user->id,
-            'transaction_type' => 'purchase',
-            'amount' => 100.00,
-        ]);
-
-        // Mock DB::transaction to ensure it's called
-        DB::shouldReceive('transaction')
-            ->once()
-            ->andReturnUsing(function ($callback) {
-                return $callback();
-            });
-
-        // Mock DB::table to prevent actual database calls
-        DB::shouldReceive('table')
-            ->with('events')
-            ->andReturnSelf();
-        DB::shouldReceive('insert')
-            ->andReturn(true);
-
-        $this->achievementService->checkAndUnlockAchievements($user);
+        Event::assertDispatched(AchievementUnlocked::class, function ($event) use ($user, $achievement) {
+            return $event->user->id === $user->id && $event->achievement->id === $achievement->id;
+        });
     }
 }

@@ -8,6 +8,7 @@ use App\Models\User;
 use App\Services\LoyaltyService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Event;
+use Illuminate\Support\Facades\Queue;
 use Tests\TestCase;
 
 class LoyaltyServiceTest extends TestCase
@@ -57,6 +58,7 @@ class LoyaltyServiceTest extends TestCase
             'description' => 'Make your first purchase',
             'criteria' => ['transaction_count' => 1],
             'points_required' => 0,
+            'is_active' => true,
         ]);
 
         // Create a transaction for the user to meet the criteria
@@ -109,7 +111,7 @@ class LoyaltyServiceTest extends TestCase
         $this->assertEquals($externalTransactionId, $transaction->external_transaction_id);
         $this->assertEquals('completed', $transaction->status);
 
-        // Check that points were calculated correctly (default 10 points per dollar)
+        // Check that points were calculated correctly (default 10 points per naira)
         $expectedPoints = (int) floor($amount * 10);
         $this->assertEquals($expectedPoints, $transaction->points_earned);
 
@@ -138,14 +140,19 @@ class LoyaltyServiceTest extends TestCase
         $this->assertNull($transaction->external_transaction_id);
     }
 
-    public function test_process_purchase_dispatches_event(): void
+    public function test_process_purchase_dispatches_job(): void
     {
         $user = User::factory()->create();
         $amount = 100.00;
 
-        $this->loyaltyService->processPurchase($user, $amount);
+        Queue::fake();
 
-        Event::assertDispatched(\App\Events\PurchaseProcessed::class);
+        $loyaltyService = new LoyaltyService;
+        $transaction = $loyaltyService->processPurchase($user, $amount);
+
+        Queue::assertPushed(\App\Jobs\ProcessPurchaseEvent::class, function ($job) use ($user, $transaction) {
+            return $job->user_id === $user->id && $job->transaction_id === $transaction->id;
+        });
     }
 
     public function test_process_purchase_uses_database_transaction(): void

@@ -21,22 +21,29 @@ class LoyaltyApiTest extends TestCase
             'progress' => 100,
         ]);
 
-        $response = $this->getJson("/api/users/{$user->id}/achievements");
+        $response = $this->actingAs($user)->getJson("/api/v1/users/{$user->id}/achievements");
 
         $response->assertStatus(200)
             ->assertJsonStructure([
+                'status',
+                'code',
+                'message',
                 'data' => [
-                    'user_id',
-                    'points' => [
-                        'available',
-                        'total_earned',
-                        'total_redeemed',
-                    ],
-                    'current_badge',
-                    'achievements' => [
-                        '*' => ['id', 'name', 'description', 'unlocked_at'],
+                    'item' => [
+                        'user_id',
+                        'points' => [
+                            'available',
+                            'total_earned',
+                            'total_redeemed',
+                        ],
+                        'current_badge',
+                        'achievements' => [
+                            '*' => ['id', 'name', 'description', 'unlocked_at'],
+                        ],
                     ],
                 ],
+                'errors',
+                'meta',
             ]);
     }
 
@@ -47,12 +54,15 @@ class LoyaltyApiTest extends TestCase
         $users = User::factory()->count(3)->create();
 
         $response = $this->actingAs($admin)
-            ->getJson('/api/admin/users/achievements');
+            ->getJson('/api/v1/admin/users/achievements');
 
         $response->assertStatus(200)
             ->assertJsonStructure([
+                'status',
+                'code',
+                'message',
                 'data' => [
-                    'users' => [
+                    'items' => [
                         '*' => [
                             'id',
                             'name',
@@ -68,11 +78,14 @@ class LoyaltyApiTest extends TestCase
                         ],
                     ],
                 ],
-                'pagination' => [
-                    'current_page',
-                    'last_page',
-                    'per_page',
-                    'total',
+                'errors',
+                'meta' => [
+                    'pagination' => [
+                        'current_page',
+                        'last_page',
+                        'per_page',
+                        'total',
+                    ],
                 ],
             ]);
     }
@@ -88,21 +101,28 @@ class LoyaltyApiTest extends TestCase
             'description' => 'Test purchase',
         ];
 
-        $response = $this->postJson('/api/transactions', $transactionData);
+        $response = $this->actingAs($user)->postJson('/api/v1/transactions', $transactionData);
 
         $response->assertStatus(201)
             ->assertJsonStructure([
+                'status',
+                'code',
+                'message',
                 'data' => [
-                    'id',
-                    'user_id',
-                    'amount',
-                    'points_earned',
-                    'transaction_type',
-                    'external_transaction_id',
-                    'status',
-                    'created_at',
-                    'metadata',
+                    'item' => [
+                        'id',
+                        'user_id',
+                        'amount',
+                        'points_earned',
+                        'transaction_type',
+                        'external_transaction_id',
+                        'status',
+                        'created_at',
+                        'metadata',
+                    ],
                 ],
+                'errors',
+                'meta',
             ]);
     }
 
@@ -112,7 +132,7 @@ class LoyaltyApiTest extends TestCase
         $user->assignRole('user');
 
         $response = $this->actingAs($user)
-            ->getJson('/api/admin/users/achievements');
+            ->getJson('/api/v1/admin/users/achievements');
 
         $response->assertStatus(403);
     }
