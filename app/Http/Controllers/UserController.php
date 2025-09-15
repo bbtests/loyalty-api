@@ -74,6 +74,9 @@ class UserController extends Controller
                 }
             }
 
+            // Load relationships for the response
+            $user->load(['roles', 'loyaltyPoints', 'achievements', 'badges']);
+
             return $this->successItem(
                 new UserResource($user),
                 'User created successfully.',
@@ -135,6 +138,9 @@ class UserController extends Controller
                 $user->syncRoles([]);
             }
         }
+
+        // Load relationships for the response
+        $user->load(['roles', 'loyaltyPoints', 'achievements', 'badges']);
 
         return $this->successItem(
             new UserResource($user),
