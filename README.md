@@ -1,18 +1,181 @@
 # Bumpa Loyalty Program API
 
-A comprehensive Laravel-based API for managing a loyalty program system with achievements, badges, transactions, and cashback payments.
+A comprehensive Laravel-based microservice for managing a scalable loyalty program system with achievements, badges, transactions, and cashback payments.
 
 ## 🏗️ Architecture Overview
 
-This API provides a complete backend solution for a loyalty program featuring:
+This API implements a **microservice architecture** with **event-driven design** for a robust loyalty program featuring:
 
+- **Event-Driven Architecture**: RabbitMQ message queue integration for scalable event processing
 - **User Management**: User registration, authentication, and role-based access control
-- **Loyalty Points**: Earn, redeem, and track loyalty points
-- **Achievements**: Unlockable achievements with progress tracking
-- **Badges**: Tiered badge system with requirements
-- **Transactions**: Purchase tracking and processing
-- **Cashback Payments**: Automated cashback processing
+- **Loyalty Points**: Earn, redeem, and track loyalty points with configurable rates
+- **Achievements**: Unlockable achievements with flexible criteria and progress tracking
+- **Badges**: Tiered badge system with multiple requirement types
+- **Transactions**: Purchase tracking and processing with external transaction support
+- **Cashback Payments**: Automated cashback processing with multiple payment providers
 - **Admin Dashboard**: Comprehensive admin interface for program management
+- **Payment Integration**: Real payment providers (Paystack, Flutterwave) with robust mock testing
+
+## 🎯 Design Choices & Architecture Decisions
+
+### 1. Microservice Architecture
+**Decision**: Implemented as a well-structured service within a larger application rather than a separate microservice.
+
+**Rationale**:
+- **Scalability**: Service can be easily extracted to a separate service when needed
+- **Maintainability**: Clear separation of concerns with dedicated services and contracts
+- **Development Speed**: Faster development and testing within a single codebase
+- **Resource Efficiency**: Reduced infrastructure complexity for initial implementation
+
+### 2. Event-Driven Architecture
+**Decision**: Implemented RabbitMQ message queue for event processing with fallback to direct events.
+
+**Rationale**:
+- **Scalability**: Message queues allow horizontal scaling of event processors
+- **Reliability**: Events are persisted and can be retried on failure
+- **Decoupling**: Loose coupling between purchase processing and achievement/badge checking
+- **Performance**: Asynchronous processing prevents blocking on main transaction flow
+- **Fault Tolerance**: Fallback mechanism ensures system continues working if message queue fails
+
+**Implementation**:
+```php
+// Purchase events are published to RabbitMQ
+$this->messageQueueService->publishPurchaseEvent($user, $transaction);
+
+// Event consumers process achievements and badges asynchronously
+$this->achievementService->checkAndUnlockAchievements($user);
+$this->badgeService->checkAndUnlockBadges($user);
+```
+
+### 3. Payment Provider Architecture
+**Decision**: Implemented a flexible payment provider system with interface-based design.
+
+**Rationale**:
+- **Extensibility**: Easy to add new payment providers without changing core logic
+- **Testing**: Mock provider enables comprehensive testing without external dependencies
+- **Reliability**: Multiple providers provide redundancy and failover options
+- **Compliance**: Each provider handles their specific compliance requirements
+
+**Implementation**:
+```php
+interface PaymentProviderInterface {
+    public function initializePayment(User $user, float $amount, string $reference): array;
+    public function verifyPayment(string $reference): array;
+    public function processCashback(User $user, float $amount): array;
+}
+```
+
+### 4. Achievement & Badge System Design
+**Decision**: Flexible criteria-based system with JSON configuration.
+
+**Rationale**:
+- **Flexibility**: Support for complex achievement requirements (multiple criteria)
+- **Maintainability**: Easy to add new achievement types without code changes
+- **Performance**: Efficient progress calculation and checking
+- **User Experience**: Real-time progress tracking and notifications
+
+**Implementation**:
+```php
+// Achievement criteria examples
+'criteria' => ['transaction_count' => 10]  // Simple count
+'criteria' => ['points_minimum' => 1000]   // Points threshold
+'criteria' => [                            // Multiple criteria
+    'transaction_count' => 5,
+    'points_minimum' => 500
+]
+```
+
+### 5. Database Design
+**Decision**: Normalized database schema with proper relationships and indexing.
+
+**Rationale**:
+- **Data Integrity**: Foreign key constraints ensure data consistency
+- **Performance**: Proper indexing for frequently queried fields
+- **Scalability**: Efficient queries even with large datasets
+- **Maintainability**: Clear relationships make the system easy to understand
+
+**Key Tables**:
+- `users` - User information and authentication
+- `loyalty_points` - User point balances and history
+- `transactions` - Purchase transactions and point awards
+- `achievements` - Achievement definitions and criteria
+- `badges` - Badge definitions and requirements
+- `user_achievements` - User achievement progress and unlocks
+- `user_badges` - User badge assignments
+- `cashback_payments` - Cashback payment records
+
+### 6. API Design
+**Decision**: RESTful API with comprehensive resource endpoints and proper HTTP status codes.
+
+**Rationale**:
+- **Standards Compliance**: Follows REST principles for predictable API behavior
+- **Documentation**: Clear endpoint structure makes API self-documenting
+- **Client Integration**: Easy integration with frontend applications
+- **Versioning**: API versioning support for backward compatibility
+
+**Key Endpoints**:
+- `GET /api/users/{user}/achievements` - User achievement progress
+- `GET /api/admin/users/achievements` - Admin view of all users
+- `POST /api/transactions` - Process purchase transactions
+- `POST /api/cashback/process` - Process cashback payments
+
+### 7. Testing Strategy
+**Decision**: Comprehensive testing with unit, integration, and end-to-end tests.
+
+**Rationale**:
+- **Quality Assurance**: Ensures system reliability and prevents regressions
+- **Documentation**: Tests serve as living documentation of system behavior
+- **Confidence**: Safe refactoring and feature additions
+- **Coverage**: High test coverage across all critical paths
+
+**Test Types**:
+- **Unit Tests**: Individual service and model testing
+- **Integration Tests**: API endpoint and service interaction testing
+- **Feature Tests**: Complete user journey testing
+- **Mock Testing**: Payment provider testing with controlled scenarios
+
+### 8. Error Handling & Logging
+**Decision**: Comprehensive error handling with structured logging and graceful degradation.
+
+**Rationale**:
+- **Reliability**: System continues operating even when components fail
+- **Debugging**: Detailed logs help identify and resolve issues
+- **Monitoring**: Structured logs enable effective monitoring and alerting
+- **User Experience**: Graceful error handling prevents system crashes
+
+**Implementation**:
+```php
+try {
+    $this->messageQueueService->publishPurchaseEvent($user, $transaction);
+} catch (\Exception $e) {
+    Log::warning('Failed to publish to message queue, falling back to direct event');
+    event(new PurchaseProcessed($user, $transaction));
+}
+```
+
+### 9. Security Considerations
+**Decision**: Role-based access control with API authentication and input validation.
+
+**Rationale**:
+- **Data Protection**: Sensitive user data is properly protected
+- **Access Control**: Admin functions are restricted to authorized users
+- **Input Validation**: Prevents malicious input and data corruption
+- **Audit Trail**: All actions are logged for security monitoring
+
+### 10. Performance Optimizations
+**Decision**: Database query optimization, caching, and efficient data structures.
+
+**Rationale**:
+- **Scalability**: System performs well under high load
+- **User Experience**: Fast response times improve user satisfaction
+- **Resource Efficiency**: Optimized queries reduce server load
+- **Cost Effectiveness**: Efficient resource usage reduces infrastructure costs
+
+**Optimizations**:
+- Database indexing on frequently queried fields
+- Eager loading of related models to prevent N+1 queries
+- Caching of payment provider configurations
+- Queue-based processing for heavy operations
 
 ## 🚀 Quick Start
 
@@ -49,6 +212,22 @@ This API provides a complete backend solution for a loyalty program featuring:
 
    # API Configuration
    API_KEY=your_api_key_here
+
+   # Message Queue Configuration (RabbitMQ)
+   QUEUE_CONNECTION=rabbitmq
+   RABBITMQ_HOST=rabbitmq
+   RABBITMQ_PORT=5672
+   RABBITMQ_USER=bumpa
+   RABBITMQ_PASSWORD=bumpa123
+   RABBITMQ_VHOST=/
+   RABBITMQ_QUEUE=purchase_events
+   RABBITMQ_EXCHANGE=loyalty_events
+
+   # Payment Provider Configuration
+   PAYMENT_PROVIDER=mock
+   MOCK_PAYMENT_ENABLED=true
+   MOCK_PAYMENT_SHOULD_FAIL=false
+   MOCK_PAYMENT_FAILURE_RATE=0.0
    ```
 
 ## 🐳 Docker Setup
@@ -65,6 +244,7 @@ docker compose --profile api up -d
 # - Laravel API (laravel.test:80)
 # - PostgreSQL database
 # - Redis cache
+# - RabbitMQ message queue (localhost:5672, Management UI: localhost:15672)
 # - Horizon queue worker
 # - Scheduler
 # - Mailpit (http://localhost:8025) - Email testing
@@ -254,10 +434,41 @@ php artisan schedule:work
 
 The API comes with comprehensive seeders that create realistic test data:
 
+### Basic Seeding (Default)
+
 ```bash
-# Run all seeders
+# Run all enabled seeders (basic setup)
 php artisan db:seed
 
+# This runs:
+# - RolePermissionSeeder: Creates roles and permissions
+# - SuperAdminSeeder: Creates the super admin user
+# - UserSeeder: Creates 15+ test users
+# - BadgeSeeder: Creates tiered badges (Bronze, Silver, Gold, Platinum)
+# - AchievementSeeder: Creates unlockable achievements
+```
+
+### Full Loyalty System Seeding (Recommended)
+
+To get a complete view of the loyalty system with realistic data, uncomment the additional seeders in `database/seeders/DatabaseSeeder.php`:
+
+```php
+// In DatabaseSeeder.php, uncomment these lines:
+LoyaltyPointSeeder::class,
+UserAchievementSeeder::class,
+UserBadgeSeeder::class,
+```
+
+Then run the full seeding:
+
+```bash
+# Run all seeders including the commented ones
+php artisan db:seed
+```
+
+### Individual Seeder Commands
+
+```bash
 # Run specific seeders
 php artisan db:seed --class=UserSeeder
 php artisan db:seed --class=AchievementSeeder
@@ -265,16 +476,40 @@ php artisan db:seed --class=BadgeSeeder
 php artisan db:seed --class=LoyaltyPointSeeder
 php artisan db:seed --class=UserAchievementSeeder
 php artisan db:seed --class=UserBadgeSeeder
+php artisan db:seed --class=RolePermissionSeeder
+php artisan db:seed --class=SuperAdminSeeder
 ```
 
 ### Seeded Data Includes:
 
+#### Basic Seeding:
 - **Users**: 15+ users with various roles and profiles
-- **Achievements**: 5+ unlockable achievements
+- **Achievements**: 5+ unlockable achievements with criteria
 - **Badges**: 4+ tiered badges (Bronze, Silver, Gold, Platinum)
-- **Loyalty Points**: Realistic point distributions
-- **User Achievements**: Random achievement assignments
+- **Roles & Permissions**: Admin, user roles with proper permissions
+
+#### Full Seeding (with commented seeders):
+- **Loyalty Points**: Realistic point distributions across users
+- **User Achievements**: Random achievement assignments and progress
 - **User Badges**: Badge assignments based on point thresholds
+- **Complete Loyalty System**: Full user progression with points, achievements, and badges
+
+### Quick Setup for Full Demo
+
+To quickly set up the complete loyalty system for demonstration:
+
+```bash
+# 1. Uncomment the additional seeders in DatabaseSeeder.php
+# 2. Run fresh migration with full seeding
+docker compose exec laravel.test php artisan migrate:fresh --seed
+
+# This will give you:
+# - Complete user base with realistic loyalty data
+# - Users with various achievement progress
+# - Users with different badge tiers
+# - Realistic point distributions
+# - Full loyalty program functionality
+```
 
 ## 🔐 Authentication
 
@@ -366,15 +601,74 @@ curl -X GET "http://laravel.test/api/v1/users" \
 
 ## 🔄 Queue Processing
 
-The API uses Laravel Horizon for queue management:
+The API uses Laravel Horizon for queue management and RabbitMQ for event-driven architecture:
 
 ```bash
 # Start Horizon (if running locally)
 php artisan horizon
 
+# Start message queue consumer for purchase events
+php artisan loyalty:consume-purchase-events
+
 # Monitor queues
 php artisan horizon:status
 ```
+
+### Message Queue Architecture
+
+The system uses RabbitMQ for event-driven processing:
+
+- **Purchase Events**: When a transaction is processed, an event is published to RabbitMQ
+- **Event Consumers**: Background workers consume events and process achievements/badges
+- **Fault Tolerance**: If RabbitMQ is unavailable, the system falls back to direct event dispatch
+- **Scalability**: Multiple consumers can process events in parallel
+
+### RabbitMQ Management
+
+Access the RabbitMQ management interface at `http://localhost:15672`:
+- **Username**: `bumpa`
+- **Password**: `bumpa123`
+
+Monitor queues, exchanges, and message flow through the web interface.
+
+## 💳 Payment Integration
+
+The API supports multiple payment providers with a flexible architecture:
+
+### Supported Providers
+
+1. **Paystack** - Nigerian payment gateway
+2. **Flutterwave** - Pan-African payment gateway  
+3. **Mock Provider** - For testing and development
+
+### Payment Provider Features
+
+- **Payment Initialization**: Create payment requests
+- **Payment Verification**: Verify completed payments
+- **Cashback Processing**: Automated cashback transfers
+- **Error Handling**: Comprehensive error scenarios and retry logic
+- **Mock Testing**: Configurable mock responses for testing
+
+### Mock Provider Configuration
+
+The mock provider supports various testing scenarios:
+
+```bash
+# Configure mock behavior
+MOCK_PAYMENT_ENABLED=true
+MOCK_PAYMENT_SHOULD_FAIL=false
+MOCK_PAYMENT_FAILURE_RATE=0.0
+MOCK_PAYMENT_SUCCESS_RATE=0.95
+MOCK_PAYMENT_DELAY_MS=300
+```
+
+### Payment Endpoints
+
+- `POST /api/v1/payments/initialize` - Initialize payment
+- `POST /api/v1/payments/verify` - Verify payment
+- `POST /api/v1/payments/cashback` - Process cashback
+- `GET /api/v1/payments/providers` - List available providers
+- `GET /api/v1/payments/configuration` - Get payment configuration
 
 ## 🧪 Testing
 
@@ -386,9 +680,37 @@ php artisan test
 php artisan test --testsuite=Feature
 php artisan test --testsuite=Unit
 
+# Run specific test files
+php artisan test tests/Unit/AchievementServiceTest.php
+php artisan test tests/Unit/BadgeServiceTest.php
+php artisan test tests/Unit/MessageQueueServiceTest.php
+php artisan test tests/Unit/MockPaymentProviderTest.php
+php artisan test tests/Feature/LoyaltyProgramIntegrationTest.php
+php artisan test tests/Feature/PaymentIntegrationTest.php
+
 # Generate coverage report
 php artisan test --coverage
 ```
+
+### Test Coverage
+
+The test suite includes comprehensive coverage:
+
+- **Unit Tests**: Individual service and model testing
+  - `AchievementServiceTest` - Achievement logic and criteria checking
+  - `BadgeServiceTest` - Badge unlocking and tier progression
+  - `MessageQueueServiceTest` - RabbitMQ integration and event publishing
+  - `MockPaymentProviderTest` - Payment provider testing with various scenarios
+
+- **Integration Tests**: API endpoint and service interaction testing
+  - `LoyaltyProgramIntegrationTest` - Complete loyalty program flow
+  - `PaymentIntegrationTest` - Payment provider integration and cashback processing
+
+- **Feature Tests**: Complete user journey testing
+  - User achievement and badge progression
+  - Admin dashboard functionality
+  - Transaction processing and point awards
+  - Cashback payment processing
 
 ## 📧 Email & Notification Handling
 
