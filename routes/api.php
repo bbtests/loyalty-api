@@ -54,6 +54,9 @@ Route::middleware('throttle:api')->prefix('v1')->group(function () {
         Route::apiResource('users', UserController::class);
         Route::apiResource('achievements', AchievementController::class);
         Route::apiResource('badges', BadgeController::class);
+
+        // Achievement simulation endpoint
+        Route::post('achievements/simulate', [AchievementController::class, 'simulate']);
         Route::apiResource('loyalty-points', LoyaltyPointController::class);
         Route::apiResource('transactions', TransactionController::class);
         Route::apiResource('cashback-payments', CashbackPaymentController::class);

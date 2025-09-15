@@ -4,7 +4,6 @@ namespace App\Observers;
 
 use App\Models\User;
 use App\Notifications\UserCreatedNotification;
-use Nuwave\Lighthouse\Execution\Utils\Subscription;
 
 class UserObserver
 {
@@ -23,7 +22,6 @@ class UserObserver
     public function created(User $user)
     {
         $user->notify(new UserCreatedNotification);
-        // Subscription::broadcast('userCreated', $user);
     }
 
     /**

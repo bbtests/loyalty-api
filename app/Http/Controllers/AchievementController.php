@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Http\Resources\Achievement\AchievementResource;
 use App\Models\Achievement;
+use App\Services\AchievementService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -118,6 +119,64 @@ class AchievementController extends Controller
             return $this->successMessage('Achievement deleted successfully.');
         } catch (\Exception $e) {
             return $this->errorResponse('Failed to delete achievement', 500, [
+                $e->getMessage(),
+            ]);
+        }
+    }
+
+    /**
+     * Simulate unlocking a specific achievement for the authenticated user.
+     */
+    public function simulate(Request $request): JsonResponse
+    {
+        try {
+            $user = $request->user();
+
+            if (! $user) {
+                return $this->errorResponse('User not authenticated', 401);
+            }
+
+            $achievementId = $request->input('achievement_id');
+
+            if (! $achievementId) {
+                // If no specific achievement ID provided, get a random unlocked achievement
+                $availableAchievements = Achievement::active()
+                    ->whereNotIn('id', $user->achievements->pluck('id')->toArray())
+                    ->get();
+
+                if ($availableAchievements->isEmpty()) {
+                    return $this->errorResponse('No available achievements to unlock', 400);
+                }
+
+                $achievement = $availableAchievements->random();
+            } else {
+                $achievement = Achievement::find($achievementId);
+
+                if (! $achievement) {
+                    return $this->errorResponse('Achievement not found', 404);
+                }
+
+                if (! $achievement->is_active) {
+                    return $this->errorResponse('Achievement is not active', 400);
+                }
+
+                // Check if already unlocked
+                if ($user->achievements()->where('achievement_id', $achievement->id)->exists()) {
+                    return $this->errorResponse('Achievement already unlocked', 400);
+                }
+            }
+
+            // Manually unlock the achievement
+            $achievementService = new AchievementService;
+            $achievementService->unlockAchievement($user, $achievement);
+
+            return $this->successItem(
+                new AchievementResource($achievement),
+                "Achievement '{$achievement->name}' unlocked successfully!",
+                200
+            );
+        } catch (\Exception $e) {
+            return $this->errorResponse('Failed to simulate achievement', 500, [
                 $e->getMessage(),
             ]);
         }

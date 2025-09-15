@@ -2,9 +2,9 @@
 
 namespace App\Services;
 
-use App\Events\BadgeUnlocked;
 use App\Models\Badge;
 use App\Models\User;
+use App\Models\UserBadge;
 use Illuminate\Support\Facades\DB;
 
 class BadgeService
@@ -100,7 +100,10 @@ class BadgeService
                 return; // Already earned, skip
             }
 
-            $user->badges()->attach($badge->id, [
+            // Create the UserBadge record to trigger observer
+            UserBadge::create([
+                'user_id' => $user->id,
+                'badge_id' => $badge->id,
                 'earned_at' => now(),
             ]);
 
@@ -110,9 +113,6 @@ class BadgeService
                 'badge_name' => $badge->name,
                 'badge_tier' => $badge->tier,
             ]);
-
-            // Broadcast the event
-            event(new BadgeUnlocked($user, $badge));
         });
     }
 

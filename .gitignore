@@ -28,3 +28,4 @@ phpstan-baseline.neon
 resources/views/scribe
 coverage.txt
 coverage-html
+.pnpm-store

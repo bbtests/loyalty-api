@@ -2,9 +2,9 @@
 
 namespace App\Services;
 
-use App\Events\AchievementUnlocked;
 use App\Models\Achievement;
 use App\Models\User;
+use App\Models\UserAchievement;
 use Illuminate\Support\Facades\DB;
 
 class AchievementService
@@ -116,7 +116,7 @@ class AchievementService
         return true;
     }
 
-    private function unlockAchievement(User $user, Achievement $achievement): void
+    public function unlockAchievement(User $user, Achievement $achievement): void
     {
         DB::transaction(function () use ($user, $achievement) {
             // Check if achievement is already unlocked
@@ -124,7 +124,10 @@ class AchievementService
                 return; // Already unlocked, skip
             }
 
-            $user->achievements()->attach($achievement->id, [
+            // Create the UserAchievement record directly to trigger observer
+            UserAchievement::create([
+                'user_id' => $user->id,
+                'achievement_id' => $achievement->id,
                 'unlocked_at' => now(),
             ]);
 
@@ -134,8 +137,7 @@ class AchievementService
                 'achievement_name' => $achievement->name,
             ]);
 
-            // Broadcast the event
-            event(new AchievementUnlocked($user, $achievement));
+            // Note: AchievementUnlocked event will be triggered automatically by UserAchievementObserver
         });
     }
 

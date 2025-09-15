@@ -8,6 +8,9 @@ use Illuminate\Broadcasting\InteractsWithSockets;
 use Illuminate\Foundation\Events\Dispatchable;
 use Illuminate\Queue\SerializesModels;
 
+/**
+ * Event fired when a purchase transaction is processed
+ */
 class PurchaseProcessed
 {
     use Dispatchable, InteractsWithSockets, SerializesModels;
