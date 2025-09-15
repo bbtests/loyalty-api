@@ -20,7 +20,7 @@ class BadgeServiceTest extends TestCase
     {
         parent::setUp();
         $this->badgeService = new BadgeService;
-        Event::fake();
+        Event::fake([BadgeUnlocked::class]);
     }
 
     public function test_can_check_and_unlock_bronze_badge(): void

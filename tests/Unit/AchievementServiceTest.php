@@ -21,7 +21,7 @@ class AchievementServiceTest extends TestCase
     {
         parent::setUp();
         $this->achievementService = new AchievementService;
-        Event::fake();
+        Event::fake([AchievementUnlocked::class]);
     }
 
     public function test_can_check_and_unlock_first_purchase_achievement(): void

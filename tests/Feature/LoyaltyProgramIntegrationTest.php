@@ -21,7 +21,13 @@ class LoyaltyProgramIntegrationTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
-        Event::fake();
+
+        // Disable broadcasting in tests to prevent broadcasting errors
+        config(['broadcasting.default' => null]);
+
+        // Fake all events except the ones we want to test
+        Event::fake([AchievementUnlocked::class, BadgeUnlocked::class]);
+
         // Don't fake the queue for loyalty rewards processing
         // Queue::fake();
     }
